@@ -9,7 +9,7 @@
 ---
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/drive/1NMMv89QBUJA_xkYSy2QZKTxHoRxzwqSk?usp=sharing)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/CognitiveAISystems/MAPF-GPT/blob/main/LICENSE)
 [![arXiv](https://img.shields.io/badge/arXiv-2409.00134-b31b1b.svg)](https://arxiv.org/abs/2409.00134)
 [![Hugging Face](https://img.shields.io/badge/Weights-MAPF--GPT-blue?logo=huggingface)](https://huggingface.co/aandreychuk/MAPF-GPT/tree/main)
 [![Hugging Face](https://img.shields.io/badge/Dataset-MAPF--GPT-blue?logo=huggingface)](https://huggingface.co/datasets/aandreychuk/MAPF-GPT/tree/main)

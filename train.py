@@ -1,19 +1,16 @@
 import multiprocessing
-from copy import deepcopy
-
-import pyarrow as pa
 
 # Ensure the 'spawn' start method is used
 multiprocessing.set_start_method("spawn", force=True)
-import glob
+
+from loguru import logger
+
+from gpt.fast_data_loader import MapfArrowDataset
+
 import math
 import os
 import time
-from collections import defaultdict
 from contextlib import nullcontext
-from itertools import cycle
-
-import numpy as np
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -32,23 +29,21 @@ eval_iters = 40
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
 init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
 # wandb logging
-wandb_log = True  # disabled by default
+wandb_log = False  # disabled by default
 wandb_project = "mapf-gpt"
-# wandb_run_name = 'mini-mapf-gpt' # 'run' + str(time.time())
-# data
-dataset = "mazes-82M"
-gradient_accumulation_steps = 1  # used to simulate larger batch sizes
+
+gradient_accumulation_steps = 16  # used to simulate larger batch sizes
 batch_size = 64  # if gradient_accumulation_steps > 1, this is the micro-batch size
-block_size = 512
+block_size = 256
 # model
-n_layer = 4
-n_head = 4
-n_embd = 256
+n_layer = 2
+n_head = 2
+n_embd = 80
 dropout = 0.0  # for pretraining 0 is good, for finetuning try 0.1+
 bias = False  # do we use bias inside LayerNorm and Linear layers?
 # adamw optimizer
 learning_rate = 6e-4  # max learning rate
-max_iters = 600000  # total number of training iterations
+max_iters = 30000  # total number of training iterations
 weight_decay = 1e-1
 beta1 = 0.9
 beta2 = 0.95
@@ -56,14 +51,17 @@ grad_clip = 1.0  # clip gradients at this value, or disable if == 0.0
 # learning rate decay settings
 decay_lr = True  # whether to decay the learning rate
 warmup_iters = 2000  # how many steps to warm up for
-lr_decay_iters = 600000  # should be ~= max_iters per Chinchilla
+lr_decay_iters = 30000  # should be ~= max_iters per Chinchilla
 min_lr = 6e-5  # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 # DDP settings
 backend = "nccl"  # 'nccl', 'gloo', etc.
 # system
-device = (
-    "cuda"  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-)
+device = ("cuda")  # examples: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
+
+if 'cuda' in device and not torch.cuda.is_available():
+    device = 'cpu'
+    logger.warning(f'Cuda is not available, switching to {device}')
+
 dtype = (
     "bfloat16"
     if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
@@ -71,8 +69,8 @@ dtype = (
 )  # 'float32', 'bfloat16', or 'float16', the latter will auto implement a GradScaler
 compile = True  # use PyTorch 2.0 to compile the model to be faster
 # -----------------------------------------------------------------------------
-train_data_file = "dataset/mazes-castar.hdf5"
-valid_data_file = "dataset/mazes-castar-val.hdf5"
+train_data_file = "dataset/train"
+valid_data_file = "dataset/validation"
 
 config_keys = [
     k
@@ -84,30 +82,17 @@ config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 current_train_index = 0
 current_valid_index = 0
 
+train_data = MapfArrowDataset(train_data_file, device=device, batch_size=batch_size)
+val_data = MapfArrowDataset(valid_data_file, device=device, batch_size=batch_size)
 
-def get_dataset_size(folder_path):
-    file_paths = glob.glob(f"{folder_path}/*.arrow")
-    total_elements = 0
-
-    for file_path in file_paths:
-        with pa.memory_map(file_path) as source:
-            table = pa.ipc.open_file(source).read_all()
-        num_elements = len(table)
-        total_elements += num_elements
-
-    return total_elements
+train_data_iter = iter(train_data)
+val_data_iter = iter(val_data)
 
 
-def calculate_epochs(
-    max_iters, dataset_size, batch_size, gradient_accumulation_steps=1
-):
+def calculate_epochs(max_iters, dataset_size, batch_size, gradient_accumulation_steps=1):
     # Effective batch size considering gradient accumulation
     effective_batch_size = batch_size * gradient_accumulation_steps
-
-    # Number of steps (iterations) to go through the entire dataset once (i.e., one epoch)
     steps_per_epoch = dataset_size // effective_batch_size
-
-    # Total number of epochs
     num_epochs = max_iters / steps_per_epoch
 
     return num_epochs
@@ -121,18 +106,12 @@ def human_readable_size(size):
     return f"{size:.2f} B pairs"
 
 
-print(f"Train set size: {human_readable_size(get_dataset_size(train_data_file))}")
-print(f"Validation set size: {human_readable_size(get_dataset_size(valid_data_file))}")
+logger.info(f"Train set size: {human_readable_size(train_data.get_full_dataset_size())}")
+logger.info(f"Validation set size: {human_readable_size(val_data.get_full_dataset_size())}")
 
-# Calculate the number of epochs
-num_epochs = calculate_epochs(
-    max_iters,
-    get_dataset_size(train_data_file),
-    batch_size,
-    gradient_accumulation_steps,
-)
+num_epochs = calculate_epochs(max_iters, train_data.get_full_dataset_size(), batch_size, gradient_accumulation_steps)
 
-print(f"Number of training epochs: {num_epochs:.2f}")
+logger.info(f"Number of training epochs: {num_epochs:.2f}")
 
 # various inits, derived attributes, I/O setup
 ddp = int(os.environ.get("RANK", -1)) != -1  # is this a ddp run?
@@ -155,7 +134,7 @@ else:
     seed_offset = 0
     ddp_world_size = 1
 tokens_per_iter = gradient_accumulation_steps * ddp_world_size * batch_size * block_size
-print(f"tokens per iteration will be: {tokens_per_iter:,}")
+logger.info(f"tokens per iteration will be: {tokens_per_iter:,}")
 
 if master_process:
     os.makedirs(out_dir, exist_ok=True)
@@ -175,87 +154,21 @@ ctx = (
     else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 )
 
-
-def mask(batch):
-    result = []
-    for input in batch:
-        result.append(tokenizer.encoder.mask(input))
-    return result
-
-
-def batch_generator(path):
-    file_paths = sorted(glob.glob(os.path.join(path, "*.arrow")))
-    total_files = len(file_paths)
-    if "train" in path:
-        files_per_worker = total_files // ddp_world_size
-        start_index = ddp_local_rank * files_per_worker
-        end_index = start_index + files_per_worker
-        file_paths = file_paths[start_index:end_index]
-
-    def read_arrow_files(file_paths):
-        for file_path in cycle(file_paths):
-            with pa.memory_map(file_path) as source:
-                table = pa.ipc.open_file(source).read_all()
-            input_tensors = table["input_tensors"].to_numpy()
-            input_tensors = np.stack(input_tensors).astype(np.int64)
-            gt_actions = table["gt_actions"].to_numpy()
-            gt_actions = np.array(gt_actions, dtype=np.int64)
-
-            indices = np.arange(len(input_tensors))
-            np.random.shuffle(indices)
-
-            shuffled_input_tensors = input_tensors[indices]
-            shuffled_gt_actions = gt_actions[indices]
-            shuffled_input_tensors = torch.tensor(shuffled_input_tensors, dtype=torch.long).to(device, non_blocking=True)
-            shuffled_gt_actions = torch.full_like(shuffled_input_tensors, -1, dtype=torch.long)
-            shuffled_gt_actions[:, -1] = torch.tensor(gt_actions, dtype=torch.long)
-            shuffled_gt_actions = shuffled_gt_actions.to(device, non_blocking=True)
-            yield shuffled_input_tensors, shuffled_gt_actions
-
-    for input_tensors, gt_actions in read_arrow_files(file_paths):
-        num_elements = len(input_tensors)
-        start_index = 0
-
-        while start_index + batch_size <= num_elements:
-            end_index = start_index + batch_size
-            data = input_tensors[start_index:end_index]
-            if (
-                cfg.mask_cost2go
-                or cfg.mask_goal
-                or cfg.mask_greed_action
-                or cfg.mask_actions_history
-            ):
-                data = mask(deepcopy(data))
-            yield {
-                "input_tensors": data,
-                "gt_actions": gt_actions[start_index:end_index],
-            }
-            start_index = end_index
-
-
 cfg = InputParameters()
 tokenizer = Tokenizer(cfg)
-train_data = batch_generator(train_data_file)
-val_data = batch_generator(valid_data_file)
 
 
 def get_batch(data):
-    batch = next(data)
-    return batch["input_tensors"], batch["gt_actions"]
+    x, y = next(data)
+    # casting y to long, since it's cross entropy requirement
+    return x.to(torch.int), y.to(torch.long)
 
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
 
-# attempt to derive vocab_size from the dataset
-# meta_path = os.path.join(data_dir, 'meta.pkl')
 meta_vocab_size = len(tokenizer.encoder.vocab)
-# if os.path.exists(meta_path):
-#     with open(meta_path, 'rb') as f:
-#         meta = pickle.load(f)
-#     meta_vocab_size = meta['vocab_size']
-#     print(f"found vocab_size = {meta_vocab_size} (inside {meta_path})")
 
 # model init
 model_args = dict(
@@ -269,12 +182,12 @@ model_args = dict(
 )  # start with model_args from command line
 if init_from == "scratch":
     # init a new model from scratch
-    print("Initializing a new model from scratch")
+    logger.info("Initializing a new model from scratch")
     model_args["vocab_size"] = meta_vocab_size
     gptconf = GPTConfig(**model_args)
     model = GPT(gptconf)
 elif init_from == "resume":
-    print(f"Resuming training from {out_dir}")
+    logger.info(f"Resuming training from {out_dir}")
     # resume training from a checkpoint.
     ckpt_path = os.path.join(out_dir, "ckpt.pt")
     checkpoint = torch.load(ckpt_path, map_location=device)
@@ -292,12 +205,12 @@ elif init_from == "resume":
     unwanted_prefix = "_orig_mod."
     for k, v in list(state_dict.items()):
         if k.startswith(unwanted_prefix):
-            state_dict[k[len(unwanted_prefix) :]] = state_dict.pop(k)
+            state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
     model.load_state_dict(state_dict)
     iter_num = checkpoint["iter_num"]
     best_val_loss = checkpoint["best_val_loss"]
 
-print("number of parameters: %.2fM" % (model.get_num_params() / 1e6,))
+logger.info("number of parameters: %.2fM" % (model.get_num_params() / 1e6,))
 
 model.to(device)
 
@@ -311,11 +224,14 @@ optimizer = model.configure_optimizers(
 if init_from == "resume":
     optimizer.load_state_dict(checkpoint["optimizer"])
 checkpoint = None  # free up memory
-# compile the model
-if compile:
-    print("compiling the model... (takes a ~minute)")
+
+if compile and 'cuda' in device:
+    logger.info("compiling the model... (takes a ~minute)")
     unoptimized_model = model
-    model = torch.compile(model)  # requires PyTorch 2.0
+    try:
+        model = torch.compile(model)
+    except AttributeError:
+        logger.warning('torch compile(model) requires PyTorch >= 2.0')
 
 # wrap model into DDP container
 if ddp:
@@ -331,9 +247,9 @@ def estimate_loss():
         losses = torch.zeros(eval_iters)
         for k in range(eval_iters):
             if split == "train":
-                X, Y = get_batch(train_data)
+                X, Y = get_batch(train_data_iter)
             else:
-                X, Y = get_batch(val_data)
+                X, Y = get_batch(val_data_iter)
             with ctx:
                 logits, loss = model(X, Y)
             losses[k] = loss.item()
@@ -364,7 +280,7 @@ if wandb_log and master_process:
     wandb.init(project=wandb_project, config=config)
 
 # training loop
-X, Y = get_batch(train_data)  # fetch the very first batch
+X, Y = get_batch(train_data_iter)  # fetch the very first batch
 t0 = time.time()
 local_iter_num = 0  # number of iterations in the lifetime of this process
 raw_model = model.module if ddp else model  # unwrap DDP container if needed
@@ -381,9 +297,7 @@ while True:
         model.eval()
         losses = estimate_loss()
         model.train()
-        print(
-            f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}"
-        )
+        logger.info(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         if wandb_log:
             wandb.log(
                 {
@@ -405,7 +319,7 @@ while True:
                     "best_val_loss": best_val_loss,
                     "config": config,
                 }
-                print(f"saving checkpoint to {out_dir}")
+                logger.info(f"saving checkpoint to {out_dir}")
                 torch.save(checkpoint, os.path.join(out_dir, "ckpt.pt"))
 
     # forward backward update, with optional gradient accumulation to simulate larger batch size
@@ -417,15 +331,15 @@ while True:
             # I really dislike that this bloats the code and forces us to repeat code
             # looking at the source of that context manager, it just toggles this variable
             model.require_backward_grad_sync = (
-                micro_step == gradient_accumulation_steps - 1
+                    micro_step == gradient_accumulation_steps - 1
             )
         with ctx:
             logits, loss = model(X, Y)
             loss = (
-                loss / gradient_accumulation_steps
+                    loss / gradient_accumulation_steps
             )  # scale the loss to account for gradient accumulation
         # immediately async prefetch next batch while model is doing the forward pass on the GPU
-        X, Y = get_batch(train_data)
+        X, Y = get_batch(train_data_iter)
         # backward pass, with gradient scaling if training in fp16
         scaler.scale(loss).backward()
     # clip the gradient
@@ -439,7 +353,7 @@ while True:
     optimizer.zero_grad(set_to_none=True)
 
     # timing and logging
-    t1 = time.time()
+    t1 = time.monotonic()
     dt = t1 - t0
     t0 = t1
     if iter_num % log_interval == 0 and master_process:
@@ -449,10 +363,9 @@ while True:
         if local_iter_num >= 5:  # let the training loop settle a bit
             mfu = raw_model.estimate_mfu(batch_size * gradient_accumulation_steps, dt)
             running_mfu = mfu if running_mfu == -1.0 else 0.9 * running_mfu + 0.1 * mfu
-        # print(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%")
-        print(
-            f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, mfu {running_mfu * 100:.2f}%, {iter_num} / {max_iters}"
-        )
+
+        logger.info(f"iter {iter_num}: loss {lossf:.4f}, time {dt * 1000:.2f}ms, "
+                    f"mfu {running_mfu * 100:.2f}%, {iter_num} / {max_iters}")
 
     iter_num += 1
     local_iter_num += 1

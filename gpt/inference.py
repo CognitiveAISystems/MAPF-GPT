@@ -100,7 +100,7 @@ class MAPFGPTInference:
         actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
         if not isinstance(actions, list):
             actions = [actions]
-        self.last_actions = actions
+        self.last_actions = actions.copy()
         return actions
 
     def reset_states(self):

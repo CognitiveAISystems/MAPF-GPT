@@ -363,9 +363,10 @@ public:
 
     void update_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals, const std::vector<int> &actions)
     {
+        for(const auto& agent : agents)
+            agents_locations[agent.pos.first][agent.pos.second] = -1; //first clear old locations for ALL agents
         for(int i = 0; i < agents.size(); i++)
         {
-            agents_locations[agents[i].pos.first][agents[i].pos.second] = -1;
             agents_locations[positions[i].first][positions[i].second] = i;
             agents[i].pos = positions[i];
             switch(actions[i])
@@ -391,24 +392,26 @@ public:
     {
         std::vector<AgentsInfo> agents_info;
         std::vector<int> considered_agents;
+        const auto& cur_agent = agents[agent_idx];
         for(int i = -cfg.agents_radius; i <= cfg.agents_radius; i++)
             for(int j = -cfg.agents_radius; j <= cfg.agents_radius; j++)
-                if(agents_locations[agents[agent_idx].pos.first + i][agents[agent_idx].pos.second + j] >= 0)
-                    considered_agents.push_back(agents_locations[agents[agent_idx].pos.first + i][agents[agent_idx].pos.second + j]);
+                if(agents_locations[cur_agent.pos.first + i][cur_agent.pos.second + j] >= 0)
+                    considered_agents.push_back(agents_locations[cur_agent.pos.first + i][cur_agent.pos.second + j]);
         std::vector<int> distances(considered_agents.size(), -1);
         for(int i = 0; i < considered_agents.size(); i++)
-            distances[i] = std::abs(agents[considered_agents[i]].pos.first - agents[agent_idx].pos.first) + 
-                           std::abs(agents[considered_agents[i]].pos.second - agents[agent_idx].pos.second);
-        std::vector<int> sorted_agents = considered_agents;
-        std::sort(sorted_agents.begin(), sorted_agents.end(), [&](int a, int b) {
-            return distances[a] < distances[b];
-        });
-        for(int i = 0; i < std::min(int(sorted_agents.size()), cfg.num_agents); i++)
+            distances[i] = std::abs(agents[considered_agents[i]].pos.first - cur_agent.pos.first) + 
+                           std::abs(agents[considered_agents[i]].pos.second - cur_agent.pos.second);
+        std::vector<std::pair<int, int>> distance_agent_pairs;
+        for(int i = 0; i < considered_agents.size(); i++) {
+            distance_agent_pairs.push_back({distances[i], considered_agents[i]});
+        }
+        std::sort(distance_agent_pairs.begin(), distance_agent_pairs.end());
+        for(int i = 0; i < std::min(int(distance_agent_pairs.size()), cfg.num_agents); i++)
         {
-            int agent_id = sorted_agents[i];
-            agents_info.push_back(AgentsInfo(std::make_pair(agents[agent_id].pos.first - agents[agent_idx].pos.first, agents[agent_id].pos.second - agents[agent_idx].pos.second),
-                                            std::make_pair(agents[agent_id].goal.first - agents[agent_idx].goal.first, agents[agent_id].goal.second - agents[agent_idx].goal.second),
-                                            agents[agent_id].action_history, agents[agent_id].next_action));
+            const auto& agent = agents[distance_agent_pairs[i].second];
+            agents_info.push_back(AgentsInfo(std::make_pair(agent.pos.first - cur_agent.pos.first, agent.pos.second - cur_agent.pos.second),
+                                            std::make_pair(agent.goal.first - cur_agent.pos.first, agent.goal.second - cur_agent.pos.second),
+                                            agent.action_history, agent.next_action));
         }
         return agents_info;
     }

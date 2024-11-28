@@ -281,8 +281,8 @@ public:
             std::vector<int> coord_indices = {
                 int_vocab.at(agent.relative_pos.first),
                 int_vocab.at(agent.relative_pos.second),
-                int_vocab.at(agent.relative_goal.first),
-                int_vocab.at(agent.relative_goal.second)
+                int_vocab.at(std::clamp(agent.relative_goal.first, -cfg.cost2go_value_limit, cfg.cost2go_value_limit)),
+                int_vocab.at(std::clamp(agent.relative_goal.second, -cfg.cost2go_value_limit, cfg.cost2go_value_limit))
             };
 
             std::vector<int> actions_indices;

@@ -13,6 +13,11 @@ PROJECT_NAME = "Benchmark"
 BASE_PATH = Path("eval_configs")
 
 
+def ensure_weights(eval_config):
+    for algo_name, algo_cfg in eval_config['algorithms'].items():
+        ToolboxRegistry.create_algorithm(algo_cfg['name'], **algo_cfg)
+
+
 def main(disable_wandb=False):
     env_cfg_name = "Environment"
     ToolboxRegistry.register_env(env_cfg_name, create_eval_env, Environment)
@@ -37,6 +42,9 @@ def main(disable_wandb=False):
         config_path = BASE_PATH / folder / f"{Path(folder).name}.yaml"
         with open(config_path) as f:
             evaluation_config = yaml.safe_load(f)
+
+        # ensuring model weights are downloaded
+        ensure_weights(evaluation_config)
 
         eval_dir = BASE_PATH / folder
         initialize_wandb(evaluation_config, eval_dir, disable_wandb, PROJECT_NAME)

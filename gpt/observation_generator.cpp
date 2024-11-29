@@ -204,7 +204,7 @@ void ObservationGenerator::create_agents(const std::vector<std::pair<int, int>> 
     int total_agents = positions.size();
     agents.resize(total_agents);
     cost2go_obs_buffer.resize(total_agents, std::vector<std::vector<int>>(2 * cfg.obs_radius + 1, std::vector<int>(2 * cfg.obs_radius + 1)));
-
+    cost2go_partials.resize(total_agents);
     for (int i = 0; i < total_agents; i++)
     {
         agents[i].pos = positions[i];

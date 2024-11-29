@@ -11,10 +11,12 @@
 #include <bitset>
 #include <algorithm>
 #include <sstream>
+#define PYBIND11_MODULE
+#ifdef PYBIND11_MODULE
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <pybind11/numpy.h>
-
+#endif
 struct InputParameters
 {
     InputParameters(int cvl = 20, int na = 13, int npa = 5, int cs = 256, int obsr = 5, int cr = 10, int ar = 5) : cost2go_value_limit(cvl),
@@ -61,25 +63,6 @@ struct Cost2GoPartial
     {}
 };
 
-class Cost2GoPartialManager
-{
-public:
-    std::vector<std::vector<int>> grid;
-    std::vector<std::vector<int>> components;
-    std::map<std::pair<int, int>, Cost2GoPartial> cost2go_partials;
-    int obs_radius;
-    int cost2go_radius;
-    int limit;
-    Cost2GoPartialManager(const std::vector<std::vector<int>> &grid, int obs_radius, int cost2go_radius, int limit) : grid(grid), obs_radius(obs_radius), cost2go_radius(cost2go_radius), limit(limit)
-    {
-        mark_components();
-    }
-    void mark_components();
-    void compute_cost2go_partial(const std::pair<int, int> &goal, const std::pair<int, int> &center);
-    void generate_cost2go_obs(const std::pair<int, int> &goal, const std::pair<int, int> &pos, bool only_obstacles, std::vector<std::vector<int>> &buffer);
-    int get_distance(const std::pair<int, int> &goal, const std::pair<int, int> &pos);
-};
-
 class Encoder
 {
 public:
@@ -98,21 +81,28 @@ public:
 class ObservationGenerator
 {
 public:
-    Cost2GoPartialManager manager;
     std::vector<Agent> agents;
     InputParameters cfg;
     Encoder encoder;
     std::vector<std::vector<int>> agents_locations;
     std::vector<std::vector<std::vector<int>>> cost2go_obs_buffer; // Buffer for each agent
-
+    std::vector<std::vector<int>> grid;
+    std::vector<std::vector<int>> components;
+    std::vector<Cost2GoPartial> cost2go_partials;
     ObservationGenerator(const std::vector<std::vector<int>> &grid, const InputParameters &cfg)
-        : manager(grid, cfg.obs_radius, cfg.cost2go_radius, cfg.cost2go_value_limit), cfg(cfg), encoder(cfg)
+        : grid(grid), cfg(cfg), encoder(cfg)
     {
         agents_locations = std::vector<std::vector<int>>(grid.size(), std::vector<int>(grid[0].size(), -1));
+        mark_components();
     }
+    ~ObservationGenerator() {}
+    void mark_components();
+    void compute_cost2go_partial(int agent_idx);
+    void generate_cost2go_obs(int agent_idx, bool only_obstacles, std::vector<std::vector<int>> &buffer);
+    int get_distance(int agent_idx, const std::pair<int, int> &pos);
 
     void create_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals);
-    std::string get_next_action(const Agent &agent);
+    void update_next_action(int agent_idx);
     void update_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals, const std::vector<int> &actions);
     std::vector<AgentsInfo> get_agents_info(int agent_idx);
     std::vector<std::vector<int>> generate_observations();

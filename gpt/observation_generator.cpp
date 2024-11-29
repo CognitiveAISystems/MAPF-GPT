@@ -1,7 +1,7 @@
 // cppimport
 #include "observation_generator.h"
 
-void Cost2GoPartialManager::mark_components()
+void ObservationGenerator::mark_components()
 {
     components = std::vector<std::vector<int>>(grid.size(), std::vector<int>(grid[0].size(), 0));
     std::vector<std::pair<int, int>> moves = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
@@ -40,14 +40,16 @@ void Cost2GoPartialManager::mark_components()
     }
 }
 
-void Cost2GoPartialManager::compute_cost2go_partial(const std::pair<int, int> &goal, const std::pair<int, int> &center)
+void ObservationGenerator::compute_cost2go_partial(int agent_idx)
 {
+    const auto &goal = agents[agent_idx].goal;
+    const auto &center = agents[agent_idx].pos;
     Cost2GoPartial partial(goal, center);
-    std::vector<std::vector<int>> cost2go(2 * cost2go_radius + 1, std::vector<int>(2 * cost2go_radius + 1, -1));
+    std::vector<std::vector<int>> cost2go(2 * cfg.cost2go_radius + 1, std::vector<int>(2 * cfg.cost2go_radius + 1, -1));
     std::vector<std::vector<int>> cost_matrix(grid.size(), std::vector<int>(grid[0].size(), -1));
     std::set<std::pair<int, int>> cells_in_component;
-    for (int i = -cost2go_radius; i <= cost2go_radius; i++)
-        for (int j = -cost2go_radius; j <= cost2go_radius; j++)
+    for (int i = -cfg.cost2go_radius; i <= cfg.cost2go_radius; i++)
+        for (int j = -cfg.cost2go_radius; j <= cfg.cost2go_radius; j++)
         {
             int ci = center.first + i;
             int cj = center.second + j;
@@ -62,10 +64,10 @@ void Cost2GoPartialManager::compute_cost2go_partial(const std::pair<int, int> &g
     {
         auto pos = fringe.front();
         fringe.pop();
-        if (pos.first < center.first + cost2go_radius &&
-            pos.first >= center.first - cost2go_radius &&
-            pos.second < center.second + cost2go_radius &&
-            pos.second >= center.second - cost2go_radius)
+        if (pos.first < center.first + cfg.cost2go_radius &&
+            pos.first >= center.first - cfg.cost2go_radius &&
+            pos.second < center.second + cfg.cost2go_radius &&
+            pos.second >= center.second - cfg.cost2go_radius)
         {
             cells_in_component.erase(pos);
             if (cells_in_component.empty())
@@ -84,48 +86,47 @@ void Cost2GoPartialManager::compute_cost2go_partial(const std::pair<int, int> &g
             }
         }
     }
-    for (int i = -cost2go_radius; i <= cost2go_radius; i++)
-        for (int j = -cost2go_radius; j <= cost2go_radius; j++)
+    for (int i = -cfg.cost2go_radius; i <= cfg.cost2go_radius; i++)
+        for (int j = -cfg.cost2go_radius; j <= cfg.cost2go_radius; j++)
         {
             int ci = center.first + i;
             int cj = center.second + j;
             if (ci >= 0 && ci < grid.size() && cj >= 0 && cj < grid[0].size())
-                cost2go[i + cost2go_radius][j + cost2go_radius] = cost_matrix[ci][cj];
+                cost2go[i + cfg.cost2go_radius][j + cfg.cost2go_radius] = cost_matrix[ci][cj];
         }
     partial.cost2go = cost2go;
-    cost2go_partials[goal] = partial;
+    cost2go_partials[agent_idx] = partial;
 }
 
-void Cost2GoPartialManager::generate_cost2go_obs(const std::pair<int, int> &goal, const std::pair<int, int> &pos, bool only_obstacles, std::vector<std::vector<int>> &buffer)
+void ObservationGenerator::generate_cost2go_obs(int agent_idx, bool only_obstacles, std::vector<std::vector<int>> &buffer)
 {
-    const auto &partial = cost2go_partials[goal];
-    int x = pos.first + cost2go_radius - partial.center.first - obs_radius;
-    int y = pos.second + cost2go_radius - partial.center.second - obs_radius;
+    const auto &partial = cost2go_partials[agent_idx];
+    int x = agents[agent_idx].pos.first + cfg.cost2go_radius - partial.center.first - cfg.obs_radius;
+    int y = agents[agent_idx].pos.second + cfg.cost2go_radius - partial.center.second - cfg.obs_radius;
     if (only_obstacles)
-        for (int i = 0; i <= obs_radius * 2; i++)
-            for (int j = 0; j <= obs_radius * 2; j++)
+        for (int i = 0; i <= cfg.obs_radius * 2; i++)
+            for (int j = 0; j <= cfg.obs_radius * 2; j++)
                 buffer[i][j] = bool(partial.cost2go[x + i][y + j] < 0);
-    int middle_value = partial.cost2go[x + obs_radius][y + obs_radius];
-    for (int i = 0; i <= obs_radius * 2; i++)
-        for (int j = 0; j <= obs_radius * 2; j++)
+    int middle_value = partial.cost2go[x + cfg.obs_radius][y + cfg.obs_radius];
+    for (int i = 0; i <= cfg.obs_radius * 2; i++)
+        for (int j = 0; j <= cfg.obs_radius * 2; j++)
         {
             int value = partial.cost2go[x + i][y + j];
             if (value >= 0)
             {
                 value -= middle_value;
-                buffer[i][j] = value > limit ? limit * 2 : value < -limit ? -limit * 2
-                                                                          : value;
+                buffer[i][j] = value > cfg.cost2go_value_limit ? cfg.cost2go_value_limit * 2 : value < -cfg.cost2go_value_limit ? -cfg.cost2go_value_limit * 2 : value;
             }
             else
-                buffer[i][j] = -limit * 4;
+                buffer[i][j] = -cfg.cost2go_value_limit * 4;
         }
 }
 
-int Cost2GoPartialManager::get_distance(const std::pair<int, int> &goal, const std::pair<int, int> &pos)
+int ObservationGenerator::get_distance(int agent_idx, const std::pair<int, int> &pos)
 {
-    if (abs(cost2go_partials[goal].center.first - pos.first) > cost2go_radius || abs(cost2go_partials[goal].center.second - pos.second) > cost2go_radius)
+    if (abs(cost2go_partials[agent_idx].center.first - pos.first) > cfg.cost2go_radius || abs(cost2go_partials[agent_idx].center.second - pos.second) > cfg.cost2go_radius)
         return -1;
-    return cost2go_partials[goal].cost2go[pos.first - cost2go_partials[goal].center.first + cost2go_radius][pos.second - cost2go_partials[goal].center.second + cost2go_radius];
+    return cost2go_partials[agent_idx].cost2go[pos.first - cost2go_partials[agent_idx].center.first + cfg.cost2go_radius][pos.second - cost2go_partials[agent_idx].center.second + cfg.cost2go_radius];
 }
 
 Encoder::Encoder(const InputParameters &cfg) : cfg(cfg)
@@ -212,68 +213,80 @@ void ObservationGenerator::create_agents(const std::vector<std::pair<int, int>> 
         {
             agents[i].action_history.push_back("n");
         }
-        manager.compute_cost2go_partial(goals[i], positions[i]);
-        agents[i].next_action = get_next_action(agents[i]);
+        compute_cost2go_partial(i);
+        update_next_action(i);
     }
 }
 
-std::string ObservationGenerator::get_next_action(const Agent &agent)
+void ObservationGenerator::update_next_action(int agent_idx)
 {
     std::string next_action;
+    auto &agent = agents[agent_idx];
     std::vector<std::pair<int, int>> moves = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-    int current_cost = manager.get_distance(agent.goal, agent.pos);
+    int current_cost = get_distance(agent_idx, agent.pos);
 
     for (const auto &move : moves)
     {
         std::pair<int, int> new_pos = {agent.pos.first + move.first, agent.pos.second + move.second};
-        int neighbor_cost = manager.get_distance(agent.goal, new_pos);
+        int neighbor_cost = get_distance(agent_idx, new_pos);
 
         if (neighbor_cost >= 0 && current_cost > neighbor_cost)
             next_action += "1";
         else
             next_action += "0";
     }
-
-    return next_action;
+    agent.next_action = next_action;
 }
 
 void ObservationGenerator::update_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals, const std::vector<int> &actions)
 {
     for (const auto &agent : agents)
         agents_locations[agent.pos.first][agent.pos.second] = -1; // first clear old locations for ALL agents
-    for (int i = 0; i < agents.size(); i++)
+    std::deque<size_t> need_to_update;
+    for (size_t i = 0; i < agents.size(); i++)
     {
+        auto &agent = agents[i];
         agents_locations[positions[i].first][positions[i].second] = i;
-        agents[i].pos = positions[i];
+        agent.pos = positions[i];
         switch (actions[i])
         {
         case 0:
-            agents[i].action_history.push_back("w");
+            agent.action_history.push_back("w");
             break;
         case 1:
-            agents[i].action_history.push_back("u");
+            agent.action_history.push_back("u");
             break;
         case 2:
-            agents[i].action_history.push_back("d");
+            agent.action_history.push_back("d");
             break;
         case 3:
-            agents[i].action_history.push_back("l");
+            agent.action_history.push_back("l");
             break;
         case 4:
-            agents[i].action_history.push_back("r");
+            agent.action_history.push_back("r");
             break;
         default:
-            agents[i].action_history.push_back("n");
+            agent.action_history.push_back("n");
             break;
         }
-        agents[i].action_history.pop_front();
-        if (agents[i].goal != goals[i])
+        agent.action_history.pop_front();
+        if (agent.goal != goals[i])
         {
-            manager.cost2go_partials.erase(agents[i].goal);
-            agents[i].goal = goals[i];
+            agent.goal = goals[i];
+            need_to_update.push_back(i);
         }
-        agents[i].next_action = get_next_action(agents[i]);
+        else
+        {
+            const auto &partial = cost2go_partials[i];
+            if (abs(agent.pos.first - partial.center.first) > cfg.cost2go_radius - cfg.obs_radius ||
+                abs(agent.pos.second - partial.center.second) > cfg.cost2go_radius - cfg.obs_radius)
+                need_to_update.push_back(i);
+        }
     }
+    for (size_t i : need_to_update)
+        compute_cost2go_partial(i);
+    for (size_t i = 0; i < agents.size(); i++)
+        update_next_action(i);
 }
 
 std::vector<AgentsInfo> ObservationGenerator::get_agents_info(int agent_idx)
@@ -286,11 +299,11 @@ std::vector<AgentsInfo> ObservationGenerator::get_agents_info(int agent_idx)
             if (agents_locations[cur_agent.pos.first + i][cur_agent.pos.second + j] >= 0)
                 considered_agents.push_back(agents_locations[cur_agent.pos.first + i][cur_agent.pos.second + j]);
     std::vector<int> distances(considered_agents.size(), -1);
-    for (int i = 0; i < considered_agents.size(); i++)
+    for (size_t i = 0; i < considered_agents.size(); i++)
         distances[i] = std::abs(agents[considered_agents[i]].pos.first - cur_agent.pos.first) +
                        std::abs(agents[considered_agents[i]].pos.second - cur_agent.pos.second);
     std::vector<std::pair<int, int>> distance_agent_pairs;
-    for (int i = 0; i < considered_agents.size(); i++)
+    for (size_t i = 0; i < considered_agents.size(); i++)
     {
         distance_agent_pairs.push_back({distances[i], considered_agents[i]});
     }
@@ -307,31 +320,18 @@ std::vector<AgentsInfo> ObservationGenerator::get_agents_info(int agent_idx)
 
 std::vector<std::vector<int>> ObservationGenerator::generate_observations()
 {
-    for (const auto &agent : agents)
-    {
-        if (manager.cost2go_partials.find(agent.goal) == manager.cost2go_partials.end())
-        {
-            manager.compute_cost2go_partial(agent.goal, agent.pos);
-        }
-        const auto &partial = manager.cost2go_partials[agent.goal];
-        if (abs(agent.pos.first - partial.center.first) > manager.cost2go_radius - cfg.obs_radius ||
-            abs(agent.pos.second - partial.center.second) > manager.cost2go_radius - cfg.obs_radius)
-        {
-            manager.compute_cost2go_partial(agent.goal, agent.pos);
-        }
-    }
 
     std::vector<std::vector<int>> observations(agents.size());
-    for (int i = 0; i < agents.size(); i++)
+    for (size_t i = 0; i < agents.size(); i++)
     {
-        manager.generate_cost2go_obs(agents[i].goal, agents[i].pos, false, cost2go_obs_buffer[i]);
+        generate_cost2go_obs(i, false, cost2go_obs_buffer[i]);
         std::vector<AgentsInfo> agents_info = get_agents_info(i);
         observations[i] = encoder.encode(agents_info, cost2go_obs_buffer[i]);
     }
     return observations;
 }
 
-/*
+
 int main()
 {
     std::vector<std::vector<int>> grid = std::vector<std::vector<int>>(50, std::vector<int>(50, 0));
@@ -345,13 +345,12 @@ int main()
             std::cout << cell << " ";
         std::cout << std::endl;
     }
-    //std::cout << manager.get_distance(std::make_pair(23, 23), std::make_pair(20, 20)) << std::endl;
     return 0;
 }
-*/
 
+
+#ifdef PYBIND11_MODULE
 namespace py = pybind11;
-
 PYBIND11_MODULE(observation_generator, m)
 {
     py::class_<InputParameters>(m, "InputParameters")
@@ -375,3 +374,4 @@ cfg['extra_compile_args'] = ['-std=c++17']
 setup_pybind11(cfg)
 %>
 */
+#endif

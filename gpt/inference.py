@@ -92,12 +92,25 @@ class MAPFGPTInference:
             self.last_actions = [-1 for _ in range(len(observations))]
         self.observation_generator.update_agents(positions, goals, self.last_actions)
         inputs = self.observation_generator.generate_observations()
-        tensor_obs = torch.tensor(
-            inputs,
-            dtype=torch.long,
-            device=self.cfg.device,
-        )
-        actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
+        batch_size = 2048
+        if len(inputs) > batch_size:
+            actions = []
+            for i in range(0, len(inputs), batch_size):
+                batch_inputs = inputs[i:i + batch_size]
+                tensor_obs = torch.tensor(
+                    batch_inputs,
+                    dtype=torch.long,
+                    device=self.cfg.device,
+                )
+                batch_actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
+                actions.extend(batch_actions)
+        else:
+            tensor_obs = torch.tensor(
+                inputs,
+                dtype=torch.long,
+                device=self.cfg.device,
+            )
+            actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
         if not isinstance(actions, list):
             actions = [actions]
         self.last_actions = actions.copy()

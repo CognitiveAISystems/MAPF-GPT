@@ -205,6 +205,7 @@ void ObservationGenerator::create_agents(const std::vector<std::pair<int, int>> 
     agents.resize(total_agents);
     cost2go_obs_buffer.resize(total_agents, std::vector<std::vector<int>>(2 * cfg.obs_radius + 1, std::vector<int>(2 * cfg.obs_radius + 1)));
     cost2go_partials.resize(total_agents);
+    #pragma omp parallel for
     for (int i = 0; i < total_agents; i++)
     {
         agents[i].pos = positions[i];
@@ -242,7 +243,7 @@ void ObservationGenerator::update_agents(const std::vector<std::pair<int, int>> 
 {
     for (const auto &agent : agents)
         agents_locations[agent.pos.first][agent.pos.second] = -1; // first clear old locations for ALL agents
-    std::deque<size_t> need_to_update;
+    std::vector<size_t> need_to_update;
     for (size_t i = 0; i < agents.size(); i++)
     {
         auto &agent = agents[i];
@@ -283,6 +284,8 @@ void ObservationGenerator::update_agents(const std::vector<std::pair<int, int>> 
                 need_to_update.push_back(i);
         }
     }
+
+    #pragma omp parallel for
     for (size_t i : need_to_update)
         compute_cost2go_partial(i);
     for (size_t i = 0; i < agents.size(); i++)
@@ -322,6 +325,7 @@ std::vector<std::vector<int>> ObservationGenerator::generate_observations()
 {
 
     std::vector<std::vector<int>> observations(agents.size());
+    #pragma omp parallel for
     for (size_t i = 0; i < agents.size(); i++)
     {
         generate_cost2go_obs(i, false, cost2go_obs_buffer[i]);

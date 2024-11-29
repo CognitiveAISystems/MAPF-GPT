@@ -11,6 +11,7 @@
 #include <bitset>
 #include <algorithm>
 #include <sstream>
+#include <omp.h>
 #define PYBIND11_MODULE
 #ifdef PYBIND11_MODULE
 #include <pybind11/pybind11.h>
@@ -92,6 +93,7 @@ public:
     ObservationGenerator(const std::vector<std::vector<int>> &grid, const InputParameters &cfg)
         : grid(grid), cfg(cfg), encoder(cfg)
     {
+        omp_set_num_threads(32);
         agents_locations = std::vector<std::vector<int>>(grid.size(), std::vector<int>(grid[0].size(), -1));
         mark_components();
     }

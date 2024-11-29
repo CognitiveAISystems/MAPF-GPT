@@ -6,12 +6,31 @@ import yaml
 from pogema_toolbox.create_env import Environment
 from pogema_toolbox.evaluator import run_episode
 from pogema_toolbox.registry import ToolboxRegistry
-
+from pogema import GridConfig
+from pydantic import validator
 from create_env import create_eval_env
 from gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
+import time
 
+class LargeGridwConfig(GridConfig):
+    with_animation: bool = False
+    use_maps: bool = True
+    @validator('num_agents', always=True)
+    def num_agents_must_be_positive(cls, v, values):
+        if v is None:
+            if values['agents_xy']:
+                v = len(values['agents_xy'])
+            else:
+                v = 1
+        assert 1 <= v <= 10_000_000, "num_agents must be in [1, 10_000_000]"
+        return v
+    @validator('size')
+    def size_restrictions(cls, v):
+        assert 2 <= v <= 2048, "size must be in [2, 2048]"
+        return v
 
 def main():
+    start_time = time.time()
     parser = argparse.ArgumentParser(description='MAPF-GPT Inference Script')
     parser.add_argument('--animation', action='store_false', help='Enable animation (default: %(default)s)')
     parser.add_argument('--num_agents', type=int, default=32, help='Number of agents (default: %(default)d)')
@@ -38,7 +57,7 @@ def main():
             print(map_)
         return
 
-    env_cfg = Environment(
+    env_cfg = LargeGridwConfig(
         with_animation=args.animation,
         observation_type="MAPF",
         on_target="nothing",
@@ -68,6 +87,8 @@ def main():
     ToolboxRegistry.info(f'Saved animation to: {svg_path}')
 
     ToolboxRegistry.success(results)
+    end_time = time.time()
+    ToolboxRegistry.info(f'Total time taken: {end_time - start_time:.2f} seconds')
 
 
 if __name__ == "__main__":

@@ -484,8 +484,8 @@ void ObservationGenerator::update_agents(const std::vector<std::pair<int, int>> 
     }
 
 #pragma omp parallel for
-    for (size_t i : need_to_update)
-        compute_cost2go_partial(i);
+    for (size_t i = 0; i < need_to_update.size(); i++)
+        compute_cost2go_partial(need_to_update[i]);
     for (size_t i = 0; i < agents.size(); i++)
         update_next_action(i);
 }

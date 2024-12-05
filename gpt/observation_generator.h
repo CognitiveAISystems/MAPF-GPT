@@ -39,15 +39,6 @@ struct InputParameters
     bool save_cost2go;
 };
 
-struct Hash64 {
-    uint64_t operator()(const std::tuple<int,int,int,int>& t) const {
-        return (uint64_t(std::get<0>(t)) << 48) |
-               (uint64_t(std::get<1>(t)) << 32) |
-               (uint64_t(std::get<2>(t)) << 16) |
-                uint64_t(std::get<3>(t));
-    }
-};
-
 struct HashPair
 {
     uint64_t operator()(const std::pair<int, int>& p) const {
@@ -123,11 +114,8 @@ public:
     {
         omp_set_num_threads(32);
         agents_locations = std::vector<std::vector<int>>(grid.size(), std::vector<int>(grid[0].size(), -1));
-        std::cout<<"marking components"<<std::endl;
         mark_components();
-        std::cout<<"precomputing cost2go"<<std::endl;
         precompute_cost2go();
-        std::cout<<"done"<<std::endl;
     }
     ~ObservationGenerator() {}
     void mark_components();

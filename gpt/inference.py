@@ -27,8 +27,8 @@ class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
     mask_cost2go: bool = False
     mask_greed_action: bool = False
     repo_id: str = 'aandreychuk/MAPF-GPT'
-    cost2go_partial_radius: int = 10
-
+    grid_step: int = 64
+    save_cost2go: bool = False
 
 def strip_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
     """
@@ -53,8 +53,9 @@ class MAPFGPTInference:
             cfg.num_previous_actions,
             cfg.context_size,
             cfg.cost2go_radius,
-            cfg.cost2go_partial_radius,
             cfg.agents_radius,
+            cfg.grid_step,
+            cfg.save_cost2go
         )
         self.observation_generator = None
         self.last_actions = None

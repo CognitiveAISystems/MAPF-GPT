@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <sstream>
 #include <omp.h>
+#include <fstream>
 #define PYBIND11_MODULE
 #ifdef PYBIND11_MODULE
 #include <pybind11/pybind11.h>
@@ -20,20 +21,38 @@
 #endif
 struct InputParameters
 {
-    InputParameters(int cvl = 20, int na = 13, int npa = 5, int cs = 256, int obsr = 5, int cr = 10, int ar = 5) : cost2go_value_limit(cvl),
+    InputParameters(int cvl = 20, int na = 13, int npa = 5, int cs = 256, int obsr = 5, int ar = 5, int gs = 64, bool sc = false) : cost2go_value_limit(cvl),
                                                                                                                    num_agents(na),
                                                                                                                    num_previous_actions(npa),
                                                                                                                    context_size(cs),
                                                                                                                    obs_radius(obsr),
-                                                                                                                   cost2go_radius(cr),
-                                                                                                                   agents_radius(ar) {}
+                                                                                                                   agents_radius(ar),
+                                                                                                                   grid_step(gs),
+                                                                                                                   save_cost2go(sc) {}
     int cost2go_value_limit;
     int num_agents;
     int num_previous_actions;
     int context_size;
     int obs_radius;
-    int cost2go_radius;
     int agents_radius;
+    int grid_step;
+    bool save_cost2go;
+};
+
+struct Hash64 {
+    uint64_t operator()(const std::tuple<int,int,int,int>& t) const {
+        return (uint64_t(std::get<0>(t)) << 48) |
+               (uint64_t(std::get<1>(t)) << 32) |
+               (uint64_t(std::get<2>(t)) << 16) |
+                uint64_t(std::get<3>(t));
+    }
+};
+
+struct HashPair
+{
+    uint64_t operator()(const std::pair<int, int>& p) const {
+        return (uint64_t(p.first) << 32) | uint64_t(p.second);
+    }
 };
 
 struct AgentsInfo
@@ -57,10 +76,17 @@ struct Agent
 struct Cost2GoPartial
 {
     std::pair<int, int> goal;
-    std::pair<int, int> center;
+    int left_border;
+    int right_border;
+    int top_border;
+    int bottom_border;
     std::vector<std::vector<int>> cost2go;
     Cost2GoPartial(const std::pair<int, int> &goal = std::make_pair(-1, -1),
-                   const std::pair<int, int> &center = std::make_pair(-1, -1)) : goal(goal), center(center)
+                   int left_border = -1,
+                   int right_border = -1,
+                   int top_border = -1,
+                   int bottom_border = -1) : 
+                   goal(goal), left_border(left_border), right_border(right_border), top_border(top_border), bottom_border(bottom_border)
     {}
 };
 
@@ -90,19 +116,27 @@ public:
     std::vector<std::vector<int>> grid;
     std::vector<std::vector<int>> components;
     std::vector<Cost2GoPartial> cost2go_partials;
+    std::vector<std::vector<uint16_t>> precomputed_cost2go;
+    std::unordered_map<std::pair<int, int>, int, HashPair> precomputed_cells_map;
     ObservationGenerator(const std::vector<std::vector<int>> &grid, const InputParameters &cfg)
         : grid(grid), cfg(cfg), encoder(cfg)
     {
         omp_set_num_threads(32);
         agents_locations = std::vector<std::vector<int>>(grid.size(), std::vector<int>(grid[0].size(), -1));
+        std::cout<<"marking components"<<std::endl;
         mark_components();
+        std::cout<<"precomputing cost2go"<<std::endl;
+        precompute_cost2go();
+        std::cout<<"done"<<std::endl;
     }
     ~ObservationGenerator() {}
     void mark_components();
     void compute_cost2go_partial(int agent_idx);
     void generate_cost2go_obs(int agent_idx, bool only_obstacles, std::vector<std::vector<int>> &buffer);
     int get_distance(int agent_idx, const std::pair<int, int> &pos);
-
+    void precompute_cost2go();
+    std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<int>>> get_goal_border_and_cost2go(const std::pair<int, int> &goal);
+    std::vector<std::pair<int, int>> get_cells_on_border(const std::pair<int, int> &center);
     void create_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals);
     void update_next_action(int agent_idx);
     void update_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals, const std::vector<int> &actions);

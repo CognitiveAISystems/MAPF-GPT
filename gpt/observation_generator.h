@@ -71,7 +71,7 @@ struct Cost2GoPartial
     int right_border;
     int top_border;
     int bottom_border;
-    std::vector<std::vector<int>> cost2go;
+    std::vector<std::vector<uint16_t>> cost2go;
     Cost2GoPartial(const std::pair<int, int> &goal = std::make_pair(-1, -1),
                    int left_border = -1,
                    int right_border = -1,
@@ -123,7 +123,7 @@ public:
     void generate_cost2go_obs(int agent_idx, bool only_obstacles, std::vector<std::vector<int>> &buffer);
     int get_distance(int agent_idx, const std::pair<int, int> &pos);
     void precompute_cost2go();
-    std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<int>>> get_goal_border_and_cost2go(const std::pair<int, int> &goal);
+    std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<uint16_t>>> get_goal_border_and_cost2go(const std::pair<int, int> &goal);
     std::vector<std::pair<int, int>> get_cells_on_border(const std::pair<int, int> &center);
     void create_agents(const std::vector<std::pair<int, int>> &positions, const std::vector<std::pair<int, int>> &goals);
     void update_next_action(int agent_idx);

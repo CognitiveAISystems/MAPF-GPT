@@ -86,7 +86,7 @@ void ObservationGenerator::precompute_cost2go()
         const auto &cell = precomputed_cells[i];
         if (grid[cell.first][cell.second] != 0)
             continue;
-        std::vector<std::pair<int, int>> moves = {{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+        std::vector<std::pair<int, int>> moves = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
         std::queue<std::pair<int, int>> fringe;
         fringe.push(cell);
         std::vector<std::vector<uint16_t>> cost_matrix(grid.size(), std::vector<uint16_t>(grid[0].size(), std::numeric_limits<uint16_t>::max()));
@@ -131,7 +131,7 @@ void ObservationGenerator::precompute_cost2go()
     }
 }
 
-std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<int>>> ObservationGenerator::get_goal_border_and_cost2go(const std::pair<int, int> &goal)
+std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<uint16_t>>> ObservationGenerator::get_goal_border_and_cost2go(const std::pair<int, int> &goal)
 {
     size_t left_border = goal.first / cfg.grid_step * cfg.grid_step;
     size_t right_border = std::min(left_border + cfg.grid_step, grid.size() - 1);
@@ -152,10 +152,10 @@ std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<int>>> Obser
             goal_border.push_back(std::make_pair(right_border, j));
     }
 
-    std::vector<std::pair<int, int>> moves = {{0, 0}, {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+    std::vector<std::pair<int, int>> moves = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
     std::queue<std::pair<int, int>> fringe;
     fringe.push(goal);
-    std::vector<std::vector<int>> cost_matrix(grid.size(), std::vector<int>(grid[0].size(), std::numeric_limits<int>::max()));
+    std::vector<std::vector<uint16_t>> cost_matrix(grid.size(), std::vector<uint16_t>(grid[0].size(), std::numeric_limits<uint16_t>::max()));
     cost_matrix[goal.first][goal.second] = 0;
     while (!fringe.empty())
     {
@@ -165,7 +165,7 @@ std::pair<std::vector<std::pair<int, int>>, std::vector<std::vector<int>>> Obser
         {
             int new_i(pos.first + move.first), new_j(pos.second + move.second);
             if (new_i >= left_border && new_j >= top_border && new_i <= right_border && new_j <= bottom_border)
-                if (grid[new_i][new_j] == 0 && cost_matrix[new_i][new_j] == std::numeric_limits<int>::max())
+                if (grid[new_i][new_j] == 0 && cost_matrix[new_i][new_j] == std::numeric_limits<uint16_t>::max())
                 {
                     cost_matrix[new_i][new_j] = cost_matrix[pos.first][pos.second] + 1;
                     fringe.push(std::make_pair(new_i, new_j));
@@ -208,8 +208,8 @@ void ObservationGenerator::compute_cost2go_partial(int agent_idx)
     size_t right_border = std::min(left_border + 2 * cfg.grid_step, grid.size() - 1);
     size_t top_border = std::max(pos.second - cfg.obs_radius, 0) / cfg.grid_step * cfg.grid_step;
     size_t bottom_border = std::min(top_border + 2 * cfg.grid_step, grid[0].size() - 1);
-    std::vector<std::vector<int>> cost2go(right_border - left_border + 1, std::vector<int>(bottom_border - top_border + 1, -1));
-    std::vector<std::vector<int>> cost_matrix(grid.size(), std::vector<int>(grid[0].size(), std::numeric_limits<int>::max()));
+    std::vector<std::vector<uint16_t>> cost2go(right_border - left_border + 1, std::vector<uint16_t>(bottom_border - top_border + 1, std::numeric_limits<uint16_t>::max()));
+    std::vector<std::vector<uint16_t>> cost_matrix(grid.size(), std::vector<uint16_t>(grid[0].size(), std::numeric_limits<uint16_t>::max()));
 
     if (grid.size() <= cfg.grid_step && grid[0].size() <= cfg.grid_step)
     {
@@ -225,18 +225,16 @@ void ObservationGenerator::compute_cost2go_partial(int agent_idx)
     {
         if (grid[cell.first][cell.second] != 0)
             continue;
-        int min_cost = std::numeric_limits<int>::max();
+        uint16_t min_cost = std::numeric_limits<uint16_t>::max();
         for (const auto &goal_cell : goal_border)
         {
-            if (grid[goal_cell.first][goal_cell.second] != 0)
-                continue;
-            if (goal_cost_matrix[goal_cell.first][goal_cell.second] == std::numeric_limits<int>::max())
+            if (grid[goal_cell.first][goal_cell.second] != 0 || goal_cost_matrix[goal_cell.first][goal_cell.second] == std::numeric_limits<uint16_t>::max())
                 continue;
             int new_cost = goal_cost_matrix[goal_cell.first][goal_cell.second] + precomputed_cost2go[precomputed_cells_map[std::make_pair(goal_cell.first, goal_cell.second)]][precomputed_cells_map[std::make_pair(cell.first, cell.second)]];
             if (min_cost > new_cost)
                 min_cost = new_cost;
         }
-        if (min_cost != std::numeric_limits<int>::max())
+        if (min_cost != std::numeric_limits<uint16_t>::max())
             pq.push({min_cost, cell});
     }
     //  if goal inside the desired cost2go square, add it to pq
@@ -266,14 +264,10 @@ void ObservationGenerator::compute_cost2go_partial(int agent_idx)
             int new_i(current.first + move.first), new_j(current.second + move.second);
             if (new_i >= left_border && new_i <= right_border &&
                 new_j >= top_border && new_j <= bottom_border &&
-                grid[new_i][new_j] == 0)
+                grid[new_i][new_j] == 0 && cost_matrix[new_i][new_j] == std::numeric_limits<uint16_t>::max())
             {
-                int new_cost = current_cost + 1;
-                if (cost_matrix[new_i][new_j] > new_cost)
-                {
-                    cost_matrix[new_i][new_j] = new_cost;
-                    fringe.push(std::make_pair(new_i, new_j));
-                }
+                cost_matrix[new_i][new_j] = current_cost + 1;
+                fringe.push(std::make_pair(new_i, new_j));
             }
         }
         if (fringe.empty() && !pq.empty())
@@ -284,9 +278,8 @@ void ObservationGenerator::compute_cost2go_partial(int agent_idx)
         }
     }
     for (int i = left_border; i <= right_border; i++)
-        for (int j = top_border; j <= bottom_border; j++)
-            if (cost_matrix[i][j] != std::numeric_limits<int>::max())
-                cost2go[i - left_border][j - top_border] = cost_matrix[i][j];
+        std::copy(cost_matrix[i].begin() + top_border, cost_matrix[i].begin() + bottom_border + 1, cost2go[i - left_border].begin());
+
     Cost2GoPartial partial(goal, left_border, right_border, top_border, bottom_border);
     partial.cost2go = cost2go;
     cost2go_partials[agent_idx] = partial;
@@ -306,7 +299,7 @@ void ObservationGenerator::generate_cost2go_obs(int agent_idx, bool only_obstacl
         for (int j = 0; j <= cfg.obs_radius * 2; j++)
         {
             int value = partial.cost2go[x + i][y + j];
-            if (value >= 0)
+            if (value != std::numeric_limits<uint16_t>::max())
             {
                 value -= middle_value;
                 buffer[i][j] = value > cfg.cost2go_value_limit ? cfg.cost2go_value_limit * 2 : value < -cfg.cost2go_value_limit ? -cfg.cost2go_value_limit * 2

@@ -242,7 +242,7 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def act(self, idx, do_sample=True):
+    def act(self, idx, do_sample=True, generator=None):
         logits, _ = self(idx)
         logits = logits[:, -1, :]
 
@@ -254,7 +254,7 @@ class GPT(nn.Module):
         probs = F.softmax(masked_logits, dim=-1)
 
         if do_sample:
-            idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = torch.multinomial(probs, num_samples=1, generator=generator)
         else:
             _, idx_next = torch.topk(probs, k=1, dim=-1)
         return idx_next.squeeze()

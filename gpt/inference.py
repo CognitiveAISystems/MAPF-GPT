@@ -29,6 +29,7 @@ class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
     repo_id: str = 'aandreychuk/MAPF-GPT'
     grid_step: int = 64
     save_cost2go: bool = False
+    batch_size: int = 2048
 
 def strip_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
     """
@@ -69,6 +70,9 @@ class MAPFGPTInference:
             ToolboxRegistry.warning(f'{self.cfg.device} is not available, using cpu instead!')
             self.cfg.device = 'cpu'
 
+        self.torch_generator = torch.Generator(device=self.cfg.device)
+        self.torch_generator.manual_seed(0)
+
         checkpoint = torch.load(
             Path(self.cfg.path_to_weights), map_location=self.cfg.device
         )
@@ -93,25 +97,16 @@ class MAPFGPTInference:
             self.last_actions = [-1 for _ in range(len(observations))]
         self.observation_generator.update_agents(positions, goals, self.last_actions)
         inputs = self.observation_generator.generate_observations()
-        batch_size = 2048
-        if len(inputs) > batch_size:
+        if len(inputs) > self.cfg.batch_size:
             actions = []
-            for i in range(0, len(inputs), batch_size):
-                batch_inputs = inputs[i:i + batch_size]
-                tensor_obs = torch.tensor(
-                    batch_inputs,
-                    dtype=torch.long,
-                    device=self.cfg.device,
-                )
-                batch_actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
+            for i in range(0, len(inputs), self.cfg.batch_size):
+                batch_inputs = inputs[i:i + self.cfg.batch_size]
+                tensor_obs = torch.tensor(batch_inputs, dtype=torch.long, device=self.cfg.device)
+                batch_actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
                 actions.extend(batch_actions)
         else:
-            tensor_obs = torch.tensor(
-                inputs,
-                dtype=torch.long,
-                device=self.cfg.device,
-            )
-            actions = torch.squeeze(self.net.act(tensor_obs)).tolist()
+            tensor_obs = torch.tensor(inputs, dtype=torch.long, device=self.cfg.device)
+            actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
         if not isinstance(actions, list):
             actions = [actions]
         self.last_actions = actions.copy()
@@ -119,3 +114,4 @@ class MAPFGPTInference:
 
     def reset_states(self):
         self.observation_generator = None
+        self.torch_generator.manual_seed(0)

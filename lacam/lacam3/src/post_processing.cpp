@@ -82,7 +82,7 @@ void make_log(const Instance &ins, const Solution &solution,
 {
   // map name
   std::smatch results;
-  const auto map_recorded_name = 'tmp_map';
+  const auto map_recorded_name = "tmp_map";
 
   // for instance-specific values
   auto dist_table = DistTable(ins);

@@ -1,4 +1,5 @@
 #include "../include/graph.hpp"
+#include <sstream>
 
 Vertex::Vertex(int _id, int _index, int _x, int _y)
     : id(_id), index(_index), x(_x), y(_y), neighbor()

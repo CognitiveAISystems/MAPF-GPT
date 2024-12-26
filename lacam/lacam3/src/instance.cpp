@@ -1,4 +1,5 @@
 #include "../include/instance.hpp"
+#include <sstream>
 
 Instance::~Instance()
 {

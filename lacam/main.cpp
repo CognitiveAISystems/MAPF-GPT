@@ -1,5 +1,6 @@
 #include <iostream>
 #include <lacam.hpp>
+#include <sstream>
 
 extern "C" {
 const char* run_lacam(const char* map_content_cstr,

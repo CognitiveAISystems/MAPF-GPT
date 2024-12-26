@@ -1,4 +1,4 @@
-numpy>=1.21.5,<=1.23.1
+numpy>=1.21.5,<=1.26.4
 torch>=2.0
 pydantic>=1.8.2,<=1.9.1
 pytest>=6.2.5,<=7.1.2
@@ -19,6 +19,6 @@ typing-extensions==4.5.0
 importlib-metadata==4.13.0
 dask[distributed]
 loguru
-pogema-toolbox==0.1.0
+pogema-toolbox==0.1.1
 pyarrow
 huggingface_hub

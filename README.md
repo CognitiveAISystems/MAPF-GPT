@@ -100,11 +100,13 @@ torchrun --standalone --nproc_per_node=1 train.py gpt/config-6M.py
 ## Citation:
 
 ```bibtex
-@article{andreychuk2024mapf-gpt,
-  title={MAPF-GPT: Imitation Learning for Multi-Agent Pathfinding at Scale},
-  author={Anton Andreychuk and Konstantin Yakovlev and Aleksandr Panov and Alexey Skrynnik},
-  journal={arXiv preprint arXiv:2409.00134},
-  year={2024},
-  url={https://arxiv.org/abs/2409.00134}
+@inproceedings{andreychuk2025mapf,
+  title={{MAPF-GPT}: Imitation learning for multi-agent pathfinding at scale},
+  author={Andreychuk, Anton and Yakovlev, Konstantin and Panov, Aleksandr and Skrynnik, Alexey},
+  booktitle={Proceedings of the AAAI Conference on Artificial Intelligence},
+  volume={39},
+  number={22},
+  pages={23126--23134},
+  year={2025}
 }
 ```

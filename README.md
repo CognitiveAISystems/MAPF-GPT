@@ -25,9 +25,21 @@ The repository consists of the following crucial parts:
 - `eval_configs` - a folder that contains configs from the POGEMA benchmark. Required by the `benchmark.py` script.
 - `dataset_configs` - a folder that contains configs to generate training and validation datasets. Required by the `generate_dataset.py` script.
 
-## Installation
+## Local Installation
 
-It's recommended to utilize Docker to build the environment compatible with MAPF-GPT code. The `docker` folder contains both `Dockerfile` and `requirements.txt` files to successfully build an appropriate container.
+For local experiments using the model, it’s recommended to use `uv`.
+
+To install the LC-MAPF dependencies with `uv`, run:
+
+```
+uv venv --python 3.10
+source .venv/bin/activate
+uv pip install -r docker/requirements.txt
+```
+
+## Docker Installation
+
+It's recommended to utilize Docker to build the environment compatible with MAPF-GPT code. The `docker` folder contains both `Dockerfile` and `requirements.txt` files.
 
 ```
 cd docker & sh build.sh
@@ -44,13 +56,13 @@ You can choose from `2M`, `6M`, and `85M` model sizes, which will be automatical
 
 Here is an example of running MAPF-GPT-2M on a maze map:
 ```
-python3 example.py --map_name validation-mazes-seed-000 --model 2M --num_agents 32
+python example.py --map_name validation-mazes-seed-000 --model 2M --num_agents 32
 ```
 
 
 Here is an example of running MAPF-GPT-85M on `wfi_warehouse` map:
 ```
-python3 example.py --map_name wfi_warehouse --model 85M --num_agents 192
+python example.py --map_name wfi_warehouse --model 85M --num_agents 192
 ```
 
 In addition to statistics about SoC, success rate, etc., you will also get an SVG file that animates the solution found by MAPF-GPT, which will be saved to the `svg/` folder.
@@ -62,7 +74,7 @@ You can run the `benchmark.py` script, which will run both MAPF-GPT-2M and MAPF-
 You can also run the MAPF-GPT-85M model by setting `path_to_weights` to `weights/model-85M.pt`. The weights for all models will be downloaded automatically.
 
 ```
-python3 benchmark.py
+python benchmark.py
 ```
 
 The results will be stored in the `eval_configs` folder near the corresponding configs. They can also be logged into wandb. The tables with average success rates will be displayed directly in the console.
@@ -76,7 +88,7 @@ To train MAPF-GPT, we generated a training dataset consisting of 1 billion tenso
 The dataset is available on the Hugging Face Hub. You can download it using the `download_dataset.py` script. Adjust the number of files downloaded to manage disk space if you don't need the entire 1 billion train dataset.
 
 ```
-python3 download_dataset.py
+python download_dataset.py
 ```
 
 ### Generating the dataset
@@ -84,7 +96,7 @@ python3 download_dataset.py
 If you want to generate the dataset from scratch or create a modified version, use the provided script. It handles all necessary steps, including instance generation (via POGEMA), solving instances (via LaCAM), generating and filtering observations, shuffling the data, and saving it into multiple `.arrow` files for efficient in-memory operation.
 
 ```
-python3 generate_dataset.py
+python generate_dataset.py
 ```
 
 Please note that generating the full training dataset of 1 billion observation-action pairs requires 256 GB of disk space, plus approximately 20 GB for temporary files. Additionally, solving all instances with LaCAM takes significant time. You can reduce the time and space needed, as well as the final dataset size, by modifying the configuration files in `dataset_configs` (e.g., adjusting the number of seeds or reducing the number of maps).
@@ -110,3 +122,4 @@ torchrun --standalone --nproc_per_node=1 train.py gpt/config-6M.py
   year={2025}
 }
 ```
+

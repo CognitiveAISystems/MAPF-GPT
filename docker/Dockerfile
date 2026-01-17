@@ -1,38 +1,20 @@
-FROM pytorch/pytorch:1.13.1-cuda11.6-cudnn8-runtime
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
 
-ADD requirements.txt /tmp/
+ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt update && apt install -y \
-    build-essential \
-    ffmpeg \
-    libsm6 \
-    libxext6 \
-    git \
-    vim \
-    cmake \
-    g++ \
-    wget \
-    libboost-all-dev \
-    pkg-config \
-    && conda install -c conda-forge pybind11
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3-pip python3-venv build-essential curl cmake g++ wget \
+    ffmpeg libsm6 libxext6 libboost-all-dev vim && \
+    rm -rf /var/lib/apt/lists/*
 
-RUN conda create -n pogema python=3.10 cmake pyarrow -y\
-    && conda run -n pogema pip install --no-cache-dir -r /tmp/requirements.txt \
-    && conda run -n pogema pip install --no-cache-dir importlib-metadata==4.13.0 --force-reinstall
+RUN ln -s /usr/bin/python3 /usr/bin/python
 
-RUN wget -q https://gitlab.com/libeigen/eigen/-/archive/3.3.9/eigen-3.3.9.tar.gz \
-    && tar -xzf eigen-3.3.9.tar.gz \
-    && mkdir -p eigen-3.3.9/build \
-    && cd eigen-3.3.9/build \
-    && cmake .. \
-    && make install \
-    && cd ../.. \
-    && rm -rf eigen-3.3.9 eigen-3.3.9.tar.gz
+# copy uv binaries
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-RUN wget https://github.com/microsoft/onnxruntime/releases/download/v1.14.1/onnxruntime-linux-x64-1.14.1.tgz \
-    && tar -xf onnxruntime-linux-x64-1.14.1.tgz \
-    && cp onnxruntime-linux-x64-1.14.1/lib/* /usr/lib/ && cp onnxruntime-linux-x64-1.14.1/include/* /usr/include/
+ENV PATH="/root/.local/bin:$PATH"
+ENV UV_SYSTEM_PYTHON=1
 
-RUN apt-get clean && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-ENTRYPOINT ["/bin/bash", "-c", "source /opt/conda/etc/profile.d/conda.sh && conda activate pogema && exec \"$@\"", "--"]
+# install python dependencies
+COPY requirements.txt /tmp/
+RUN uv pip install -U pip && uv pip install -r /tmp/requirements.txt

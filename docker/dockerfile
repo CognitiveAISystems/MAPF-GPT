@@ -16,7 +16,7 @@ RUN apt update && apt install -y \
     pkg-config \
     && conda install -c conda-forge pybind11
 
-RUN conda create -n pogema python=3.10 -y \
+RUN conda create -n pogema python=3.10 cmake pyarrow -y\
     && conda run -n pogema pip install --no-cache-dir -r /tmp/requirements.txt \
     && conda run -n pogema pip install --no-cache-dir importlib-metadata==4.13.0 --force-reinstall
 

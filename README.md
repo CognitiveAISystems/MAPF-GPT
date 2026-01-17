@@ -29,7 +29,7 @@ The repository consists of the following crucial parts:
 
 For local experiments using the model, it’s recommended to use `uv`.
 
-To install the LC-MAPF dependencies with `uv`, run:
+To install the dependencies with `uv`, run:
 
 ```
 uv venv --python 3.10

@@ -12,7 +12,6 @@ from functools import partial
 from pathlib import Path
 
 from pogema_toolbox.create_env import Environment
-from pogema_toolbox.eval_utils import initialize_wandb, save_evaluation_results
 from pogema_toolbox.evaluator import evaluation
 from pogema_toolbox.registry import ToolboxRegistry
 
@@ -225,9 +224,7 @@ def run_expert():
             evaluation_config = yaml.safe_load(f)
 
         eval_dir = Path(EXPERT_DATA_FOLDER) / config[:-5]
-        initialize_wandb(evaluation_config, eval_dir, False, EXPERT_DATA_FOLDER)
         evaluation(evaluation_config, eval_dir=eval_dir)
-        save_evaluation_results(eval_dir)
 
 def split_json(filename):
     with open(filename, "r") as f:

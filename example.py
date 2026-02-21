@@ -4,11 +4,11 @@ from pathlib import Path
 import torch
 import yaml
 from pogema_toolbox.create_env import Environment
-from pogema_toolbox.evaluator import run_episode
+from pogema_toolbox.run_episode import run_episode
 from pogema_toolbox.registry import ToolboxRegistry
 
 from create_env import create_eval_env
-from gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
+from mapf_gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
 
 
 def main():

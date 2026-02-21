@@ -20,16 +20,16 @@ The repository consists of the following crucial parts:
 - `example.py` - an example of code to run the MAPF-GPT approach.
 - `benchmark.py` - a script that launches the evaluation of the MAPF-GPT model on the POGEMA benchmark set of maps.
 - `generate_dataset.py` - a script that generates a 1B training dataset. The details are provided inside the script in the main() function.
-- `download_dataset.py` - a script that downloads 1B training dataset and 1M validation one. The dataset is uploaded to Hugging Face.
+- `dataset/download_dataset.py` - a script that downloads 1B training dataset and 1M validation one. The dataset is uploaded to Hugging Face.
 - `train.py` - a script that launches the training of the MAPF-GPT model.
 - `eval_configs` - a folder that contains configs from the POGEMA benchmark. Required by the `benchmark.py` script.
 - `dataset_configs` - a folder that contains configs to generate training and validation datasets. Required by the `generate_dataset.py` script.
 
 ## Local Installation
 
-For local experiments using the model, it’s recommended to use `uv`.
+For local experiments, it is recommended to use `uv`, installation: https://docs.astral.sh/uv/getting-started/installation.
 
-To install the dependencies with `uv`, run:
+
 
 ```
 uv venv --python 3.10

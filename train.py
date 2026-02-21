@@ -5,7 +5,7 @@ multiprocessing.set_start_method("spawn", force=True)
 
 from loguru import logger
 
-from gpt.fast_data_loader import MapfArrowDataset
+from mapf_gpt.fast_data_loader import MapfArrowDataset
 
 import math
 import os
@@ -15,7 +15,7 @@ import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 
-from gpt.model import GPT, GPTConfig
+from mapf_gpt.model import GPT, GPTConfig
 from tokenizer.parameters import InputParameters
 from tokenizer.tokenizer import Tokenizer
 
@@ -28,9 +28,6 @@ log_interval = 1
 eval_iters = 40
 always_save_checkpoint = True  # if True, always save a checkpoint after each eval
 init_from = "scratch"  # 'scratch' or 'resume' or 'gpt2*'
-# wandb logging
-wandb_log = False  # disabled by default
-wandb_project = "mapf-gpt"
 
 gradient_accumulation_steps = 16  # used to simulate larger batch sizes
 batch_size = 64  # if gradient_accumulation_steps > 1, this is the micro-batch size
@@ -77,7 +74,7 @@ config_keys = [
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-exec(open("gpt/configurator.py").read())  # overrides from command line or config file
+exec(open("mapf_gpt/configurator.py").read())  # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 current_train_index = 0
 current_valid_index = 0
@@ -273,11 +270,6 @@ def get_lr(it):
     return min_lr + coeff * (learning_rate - min_lr)
 
 
-# logging
-if wandb_log and master_process:
-    import wandb
-
-    wandb.init(project=wandb_project, config=config)
 
 # training loop
 X, Y = get_batch(train_data_iter)  # fetch the very first batch
@@ -298,16 +290,7 @@ while True:
         losses = estimate_loss()
         model.train()
         logger.info(f"step {iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-        if wandb_log:
-            wandb.log(
-                {
-                    "iter": iter_num,
-                    "train/loss": losses["train"],
-                    "val/loss": losses["val"],
-                    "lr": lr,
-                    "mfu": running_mfu * 100,  # convert to percentage
-                }
-            )
+
         if losses["val"] < best_val_loss or always_save_checkpoint:
             best_val_loss = losses["val"]
             if iter_num > 0:

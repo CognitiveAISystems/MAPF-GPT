@@ -134,7 +134,7 @@ class GPT(nn.Module):
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
-        # not 100% sure what this is, so far seems to be harmless. TODO investigate
+        # not 100% sure what this is, so far seems to be harmless.
         self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
         # init all weights
@@ -242,7 +242,7 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def act(self, idx, do_sample=True):
+    def act(self, idx, do_sample=True, generator=None):
         logits, _ = self(idx)
         logits = logits[:, -1, :]
 
@@ -254,7 +254,7 @@ class GPT(nn.Module):
         probs = F.softmax(masked_logits, dim=-1)
 
         if do_sample:
-            idx_next = torch.multinomial(probs, num_samples=1)
+            idx_next = torch.multinomial(probs, num_samples=1, generator=generator)
         else:
             _, idx_next = torch.topk(probs, k=1, dim=-1)
         return idx_next.squeeze()

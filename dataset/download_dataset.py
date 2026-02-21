@@ -1,7 +1,12 @@
 from huggingface_hub import hf_hub_download
+import os
 
 repo_id = "aandreychuk/MAPF-GPT"
-local_dir = "dataset"
+
+cwd = os.path.abspath(os.getcwd())
+base_name = os.path.basename(cwd)
+local_dir = '.' if base_name == 'dataset' else 'dataset'
+
 
 # Download the 'validation' part
 hf_hub_download(repo_id=repo_id, repo_type='dataset', subfolder="validation", filename="chunk_0_part_0.arrow", local_dir=local_dir)

@@ -2,12 +2,11 @@ from pathlib import Path
 
 import yaml
 from pogema_toolbox.create_env import Environment
-from pogema_toolbox.eval_utils import initialize_wandb, save_evaluation_results
 from pogema_toolbox.evaluator import evaluation
 from pogema_toolbox.registry import ToolboxRegistry
 
 from create_env import create_eval_env
-from gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
+from mapf_gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
 
 PROJECT_NAME = "Benchmark"
 BASE_PATH = Path("eval_configs")
@@ -18,7 +17,7 @@ def ensure_weights(eval_config):
         ToolboxRegistry.create_algorithm(algo_cfg['name'], **algo_cfg)
 
 
-def main(disable_wandb=False):
+def main():
     env_cfg_name = "Environment"
     ToolboxRegistry.register_env(env_cfg_name, create_eval_env, Environment)
     ToolboxRegistry.register_algorithm(
@@ -47,9 +46,7 @@ def main(disable_wandb=False):
         ensure_weights(evaluation_config)
 
         eval_dir = BASE_PATH / folder
-        initialize_wandb(evaluation_config, eval_dir, disable_wandb, PROJECT_NAME)
         evaluation(evaluation_config, eval_dir=eval_dir)
-        save_evaluation_results(eval_dir)
 
 
 if __name__ == "__main__":

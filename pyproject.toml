@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "MAPF-GPT"
+description = "MAPF-GPT"
+readme = "README.md"
+version = "0.0.1"
+requires-python = ">=3.10,<3.15"
+license = { text = "MIT" }
+authors = [
+    { name = "Anton Andreychuk", email = "andreychuk@cogailab.com" },
+    { name = "Alexey Skrynnik", email = "skrynnikalexey@gmail.com" },
+]
+
+dependencies = [
+    "pogema-toolbox @ git+https://github.com/Cognitive-AI-Systems/pogema-toolbox.git@toolbox-for-pogema-2.0",
+    "cppimport",
+    "torch",
+    "huggingface-hub",
+    "setuptools<=79.0.1"
+]
+urls = { "Homepage" = "https://github.com/CognitiveAISystems/MAPF-GPT" }
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["mapf_gpt"]
+
+[tool.hatch.build.targets.sdist]
+include = ["mapf_gpt"]

@@ -1,6 +1,4 @@
 torch>=2.0,<=2.10
-pydantic>=1.8.2,<=1.9.1
-pytest>=6.2.5,<=7.1.2
 tensorboard>=1.15.0
 tensorboardx>=2.0
 psutil>=5.7.0
@@ -14,7 +12,7 @@ protobuf==3.20.3
 importlib-metadata==4.13.0
 dask[distributed]
 loguru
-pogema-toolbox==0.1.1
+pogema-toolbox @ git+https://github.com/Cognitive-AI-Systems/pogema-toolbox.git@toolbox-for-pogema-2.0
 pyarrow
 huggingface_hub
 setuptools<=79.0.1

@@ -15,30 +15,30 @@ from pogema_toolbox.create_env import Environment
 from pogema_toolbox.evaluator import evaluation
 from pogema_toolbox.registry import ToolboxRegistry
 
-from create_env import create_logging_env
+from experiment_setup.create_env import create_logging_env
 from lacam.inference import LacamInference, LacamInferenceConfig
 from tokenizer.generate_observations import ObservationGenerator
 from tokenizer.parameters import InputParameters
 
 EXPERT_DATA_FOLDER = "LaCAM_data"
 TEMP_FOLDER = "temp"
-DATASET_FOLDER = "dataset"
+DATASET_FOLDER = "."
 CONFIGS = [
     "dataset_configs/10-medium-mazes/10-medium-mazes-part1.yaml",
-    "dataset_configs/10-medium-mazes/10-medium-mazes-part2.yaml",
-    "dataset_configs/10-medium-mazes/10-medium-mazes-part3.yaml",
-    "dataset_configs/10-medium-mazes/10-medium-mazes-part4.yaml",
+    # "dataset_configs/10-medium-mazes/10-medium-mazes-part2.yaml",
+    # "dataset_configs/10-medium-mazes/10-medium-mazes-part3.yaml",
+    # "dataset_configs/10-medium-mazes/10-medium-mazes-part4.yaml",
     "dataset_configs/12-medium-random/12-medium-random-part1.yaml",
 ]
 
 RANDOM_MAPS_FOLDER = "dataset_configs/12-medium-random"
 MAZES_MAPS_FOLDER = "dataset_configs/10-medium-mazes"
 
-NUM_CHUNKS = 50
+NUM_CHUNKS = 1
 FILE_PER_CHUNK = 10
-DESIRED_SIZE = 10*2**21 # per chunk
+DESIRED_SIZE = 1000 # per chunk
 MAZE_RATIO = 0.9
-NUM_PROCESSES = 50
+NUM_PROCESSES = 8
 
 def tensor_to_hash(tensor):
     tensor_bytes = tensor.tobytes()
@@ -134,6 +134,9 @@ def calculate_elements_to_pick(data, total_pick_count):
 
 def process_file(file, maps):
     tensors, actions = generate_part(file, maps)
+
+    print(f"Processed {file}: {len(tensors)} samples", flush=True)
+
     tensors, actions = balance_and_filter_tensors(tensors, actions)
     return file, tensors, actions
 
@@ -245,7 +248,7 @@ def generate_chunks():
     
     maze_chunk_size = len(maze_files) // NUM_CHUNKS
     random_chunk_size = len(random_files) // NUM_CHUNKS
-    
+    print(0, len(random_files), random_chunk_size)
     maze_chunks = [maze_files[i:i+maze_chunk_size] for i in range(0, len(maze_files), maze_chunk_size)]
     random_chunks = [random_files[i:i+random_chunk_size] for i in range(0, len(random_files), random_chunk_size)]
     
@@ -253,19 +256,26 @@ def generate_chunks():
         process_files(maze_chunks[i], random_chunks[i], f"{DATASET_FOLDER}/chunk_{i}")
         
 def main():
-    # Step 1: Run LaCAM to obtain expert data in json format.
+    print("\n=== STEP 1: Running expert generation ===", flush=True)
     run_expert()
+    print("Finished expert generation\n", flush=True)
 
-    # Step 2: Load one (or mutiple) big json file and split it (them) into small ones (1 map = 1 json).
+    print("=== STEP 2: Splitting JSON files ===", flush=True)
     files = [f"{EXPERT_DATA_FOLDER}/{config[:-5]}/LaCAM.json" for config in CONFIGS]
+    print(f"Splitting {len(files)} files", flush=True)
+
     with mp.Pool() as pool:
         pool.map(split_json, files)
-    
-    # Step 3: Generate dataset with chunk files.
+
+    print("Finished JSON splitting\n", flush=True)
+
+    print("=== STEP 3: Generating dataset chunks ===", flush=True)
     generate_chunks()
-    
-    #Step 4: clear temp folder
+
+    print("\n=== STEP 4: Cleaning temp folder ===", flush=True)
     shutil.rmtree(TEMP_FOLDER)
+
+    print("\nDataset generation finished.", flush=True)
 
 if __name__ == "__main__":
     main()

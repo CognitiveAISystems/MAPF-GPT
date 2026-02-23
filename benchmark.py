@@ -5,7 +5,7 @@ from pogema_toolbox.create_env import Environment
 from pogema_toolbox.evaluator import evaluation
 from pogema_toolbox.registry import ToolboxRegistry
 
-from create_env import create_eval_env
+from experiment_setup.create_env import create_eval_env
 from mapf_gpt.inference import MAPFGPTInference, MAPFGPTInferenceConfig
 
 PROJECT_NAME = "Benchmark"

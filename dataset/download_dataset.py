@@ -14,6 +14,6 @@ hf_hub_download(repo_id=repo_id, repo_type='dataset', subfolder="validation", fi
 # Download the 'train' part
 # reduce the number of chunks or parts if you don't need the whole dataset
 # each file contains 2**21 input tensors and requires 512 MB of disk space
-for chunk in range(50):
-    for part in range(10):
+for chunk in range(1):
+    for part in range(1):
         hf_hub_download(repo_id=repo_id, repo_type='dataset', subfolder="train", filename=f"chunk_{chunk}_part_{part}.arrow", local_dir=local_dir)

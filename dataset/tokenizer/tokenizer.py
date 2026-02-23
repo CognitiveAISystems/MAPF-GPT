@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from tokenizer.parameters import InputParameters
+from dataset.tokenizer.parameters import InputParameters
 
 
 class Tokenizer:

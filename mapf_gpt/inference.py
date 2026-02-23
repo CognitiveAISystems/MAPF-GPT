@@ -1,21 +1,7 @@
-# from pathlib import Path
-# from typing import Literal, Optional
-#
-# import cppimport.import_hook
-# import torch
-# from huggingface_hub import hf_hub_download
-# from pogema_toolbox.algorithm_config import AlgoBase
-# from pogema_toolbox.registry import ToolboxRegistry
-# from pydantic import Extra
-#
-# from mapf_gpt.model import GPT, GPTConfig
-# from tokenizer import cost2go
-# from tokenizer.tokenizer import Encoder, InputParameters
-
 from pathlib import Path
 from typing import Literal, Optional
 
-import cppimport.import_hook
+import cppimport.import_hook # noqa: F401
 import torch
 from huggingface_hub import hf_hub_download
 from pogema_toolbox.algorithm_config import AlgoBase

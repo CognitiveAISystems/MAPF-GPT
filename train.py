@@ -5,19 +5,23 @@ multiprocessing.set_start_method("spawn", force=True)
 
 from loguru import logger
 
-from mapf_gpt.fast_data_loader import MapfArrowDataset
+
 
 import math
 import os
 import time
-from contextlib import nullcontext
 import torch
+
+# fmt: off
+# ruff: noqa: E402
+from contextlib import nullcontext
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
-
+from dataset.fast_data_loader import MapfArrowDataset
 from mapf_gpt.model import GPT, GPTConfig
-from tokenizer.parameters import InputParameters
-from tokenizer.tokenizer import Tokenizer
+from dataset.tokenizer.parameters import InputParameters
+from dataset.tokenizer.tokenizer import Tokenizer
+# fmt: on
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -74,7 +78,7 @@ config_keys = [
     for k, v in globals().items()
     if not k.startswith("_") and isinstance(v, (int, float, bool, str))
 ]
-exec(open("mapf_gpt/configurator.py").read())  # overrides from command line or config file
+exec(open("experiment_setup/configurator.py").read())  # overrides from command line or config file
 config = {k: globals()[k] for k in config_keys}  # will be useful for logging
 current_train_index = 0
 current_valid_index = 0

@@ -59,8 +59,8 @@ class MAPFGPTInference:
             cfg.grid_step,
             cfg.save_cost2go
         )
-        self.observation_generator = None
-        self.last_actions = None
+        self._obs_generators = {}
+        self._last_actions = {}
 
         path_to_weights = Path(self.cfg.path_to_weights)
         if path_to_weights.name in ['model-2M.pt', 'model-6M.pt', 'model-85M.pt']:
@@ -89,33 +89,69 @@ class MAPFGPTInference:
             self.net.to(self.cfg.device)
             self.net.eval()
 
-    def act(self, observations):
-        if isinstance(observations[0], dict):
-            positions = [obs["global_xy"] for obs in observations]
-            goals = [obs["global_target_xy"] for obs in observations]
-            if self.observation_generator is None:
-                self.observation_generator = ObservationGenerator(observations[0]["global_obstacles"].copy().astype(int).tolist(), self.input_parameters)
-                self.observation_generator.create_agents(positions, goals)
-                self.last_actions = [-1 for _ in range(len(observations))]
-            self.observation_generator.update_agents(positions, goals, self.last_actions)
-            inputs = self.observation_generator.generate_observations()
-        else:
-            inputs = observations
+    def _forward_batch(self, inputs):
         if len(inputs) > self.cfg.batch_size:
             actions = []
             for i in range(0, len(inputs), self.cfg.batch_size):
-                batch_inputs = inputs[i:i + self.cfg.batch_size]
-                tensor_obs = torch.tensor(batch_inputs, dtype=torch.long, device=self.cfg.device)
+                tensor_obs = torch.tensor(inputs[i:i + self.cfg.batch_size], dtype=torch.long, device=self.cfg.device)
                 batch_actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
+                if not isinstance(batch_actions, list):
+                    batch_actions = [batch_actions]
                 actions.extend(batch_actions)
         else:
             tensor_obs = torch.tensor(inputs, dtype=torch.long, device=self.cfg.device)
             actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
-        if not isinstance(actions, list):
-            actions = [actions]
-        self.last_actions = actions.copy()
+            if not isinstance(actions, list):
+                actions = [actions]
         return actions
 
+    def _prepare_inputs(self, pos, observations):
+        if isinstance(observations[0], dict):
+            agent_positions = [obs["global_xy"] for obs in observations]
+            goals = [obs["global_target_xy"] for obs in observations]
+
+            if pos not in self._obs_generators:
+                gen = ObservationGenerator(
+                    observations[0]["global_obstacles"].copy().astype(int).tolist(),
+                    self.input_parameters,
+                )
+                gen.create_agents(agent_positions, goals)
+                self._obs_generators[pos] = gen
+                self._last_actions[pos] = [-1] * len(observations)
+
+            self._obs_generators[pos].update_agents(
+                agent_positions, goals, self._last_actions[pos]
+            )
+            return self._obs_generators[pos].generate_observations()
+        return observations
+
+    def act(self, observations):
+        return self.act_batch([observations])[0]
+
+    def act_batch(self, observations_list, positions=None):
+        if positions is None:
+            positions = list(range(len(observations_list)))
+
+        all_inputs = []
+        env_agent_counts = []
+        for pos, observations in zip(positions, observations_list):
+            inputs = self._prepare_inputs(pos, observations)
+            all_inputs.extend(inputs)
+            env_agent_counts.append(len(inputs))
+
+        all_actions = self._forward_batch(all_inputs)
+
+        results = []
+        offset = 0
+        for pos, count in zip(positions, env_agent_counts):
+            env_actions = all_actions[offset:offset + count]
+            self._last_actions[pos] = env_actions.copy()
+            results.append(env_actions)
+            offset += count
+
+        return results
+
     def reset_states(self):
-        self.observation_generator = None
+        self._obs_generators = {}
+        self._last_actions = {}
         self.torch_generator.manual_seed(0)

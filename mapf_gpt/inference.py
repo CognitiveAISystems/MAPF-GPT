@@ -19,8 +19,8 @@ class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
     cost2go_value_limit: int = 20
     agents_radius: int = 5
     cost2go_radius: int = 5
-    path_to_weights: Optional[str] = "weights/model-6M.pt"
-    device: str = "cuda"
+    path_to_weights: Optional[str] = "weights/MAPF-GPT-2M.pt"
+    device: Optional[str] = None
     context_size: int = 256
     mask_actions_history: bool = False
     mask_goal: bool = False
@@ -63,11 +63,18 @@ class MAPFGPTInference:
         self._last_actions = {}
 
         path_to_weights = Path(self.cfg.path_to_weights)
-        if path_to_weights.name in ['model-2M.pt', 'model-6M.pt', 'model-85M.pt']:
+        if path_to_weights.name in ['MAPF-GPT-2M.pt', 'MAPF-GPT-6M.pt', 'MAPF-GPT-85M.pt', 'MAPF-GPT-DDG-2M.pt']:
             hf_hub_download(repo_id=self.cfg.repo_id, filename=path_to_weights.name, local_dir=path_to_weights.parent)
             ToolboxRegistry.info(f'Using weights loaded from huggingface: {path_to_weights}')
 
-        if ('cuda' in self.cfg.device and not torch.cuda.is_available()) or (self.cfg.device == 'mps' and not torch.backends.mps.is_available()):
+        if self.cfg.device is None:
+            if torch.cuda.is_available():
+                self.cfg.device = 'cuda'
+            elif torch.backends.mps.is_available():
+                self.cfg.device = 'mps'
+            else:
+                self.cfg.device = 'cpu'
+        elif ('cuda' in self.cfg.device and not torch.cuda.is_available()) or (self.cfg.device == 'mps' and not torch.backends.mps.is_available()):
             ToolboxRegistry.warning(f'{self.cfg.device} is not available, using cpu instead!')
             self.cfg.device = 'cpu'
 

@@ -17,13 +17,13 @@ def main():
     parser.add_argument('--num_agents', type=int, default=32, help='Number of agents (default: %(default)d)')
     parser.add_argument('--seed', type=int, default=0, help='Random seed (default: %(default)d)')
     parser.add_argument('--map_name', type=str, default='validation-random-seed-001', help='Map name (default: %(default)s)')
-    parser.add_argument('--device', type=str, default='cuda', help='Device to use: cuda, cpu, mps (default: %(default)s)')
+    parser.add_argument('--device', type=str, default=None, help='Device to use: cuda, cpu, mps (default: auto-detect)')
     parser.add_argument('--max_episode_steps', type=int, default=128,
                         help='Maximum episode steps (default: %(default)d)')
     parser.add_argument('--show_map_names', action='store_true', help='Shows names of all available maps')
 
-    parser.add_argument('--model', type=str, choices=['2M', '6M', '85M'], default='2M',
-                        help='Model to use: 2M, 6M, 85M (default: %(default)s)')
+    parser.add_argument('--model', type=str, choices=['2M', '6M', '85M', 'DDG-2M'], default='2M',
+                        help='Model to use: 2M, 6M, 85M, DDG-2M (default: %(default)s)')
 
     # loading maps from eval folders
     for maps_file in Path("eval_configs").rglob('maps.yaml'):
@@ -59,7 +59,7 @@ def main():
     torch.backends.cudnn.deterministic = True
 
     env = create_eval_env(env_cfg)
-    algo = MAPFGPTInference(MAPFGPTInferenceConfig(path_to_weights=f'weights/model-{args.model}.pt', device=args.device))
+    algo = MAPFGPTInference(MAPFGPTInferenceConfig(path_to_weights=f'weights/MAPF-GPT-{args.model}.pt', device=args.device))
     algo.reset_states()
     results = run_episode(env, algo)
 

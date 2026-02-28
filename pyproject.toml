@@ -31,3 +31,6 @@ packages = ["mapf_gpt"]
 
 [tool.hatch.build.targets.sdist]
 include = ["mapf_gpt"]
+
+[tool.setuptools]
+py-modules = []

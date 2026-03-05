@@ -15,7 +15,7 @@ authors = [
 ]
 
 dependencies = [
-    "pogema-toolbox @ git+https://github.com/Cognitive-AI-Systems/pogema-toolbox.git@batched-evaluator",
+    "pogema-toolbox @ git+https://github.com/Cognitive-AI-Systems/pogema-toolbox.git@pogema-2.0",
     "cppimport",
     "torch",
     "huggingface-hub",

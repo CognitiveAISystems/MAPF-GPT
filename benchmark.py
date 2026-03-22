@@ -23,6 +23,7 @@ def main():
     ToolboxRegistry.register_algorithm(
         "MAPF-GPT", MAPFGPTInference, MAPFGPTInferenceConfig
     )
+    MAPFGPTInference.build()
 
     folder_names = [
         "01-random",

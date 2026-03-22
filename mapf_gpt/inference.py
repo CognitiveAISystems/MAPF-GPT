@@ -1,7 +1,6 @@
 from pathlib import Path
 from typing import Literal, Optional
 
-import cppimport.import_hook # noqa: F401
 import torch
 from huggingface_hub import hf_hub_download
 from pogema_toolbox.algorithm_config import AlgoBase
@@ -9,7 +8,6 @@ from pogema_toolbox.registry import ToolboxRegistry
 from pydantic import Extra
 
 from mapf_gpt.model import GPT, GPTConfig
-from mapf_gpt.observation_generator import ObservationGenerator, InputParameters
 
 
 class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
@@ -49,16 +47,6 @@ def strip_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
 class MAPFGPTInference:
     def __init__(self, cfg: MAPFGPTInferenceConfig, net=None):
         self.cfg: MAPFGPTInferenceConfig = cfg
-        self.input_parameters = InputParameters(
-            cfg.cost2go_value_limit,
-            cfg.num_agents,
-            cfg.num_previous_actions,
-            cfg.context_size,
-            cfg.cost2go_radius,
-            cfg.agents_radius,
-            cfg.grid_step,
-            cfg.save_cost2go
-        )
         self._obs_generators = {}
         self._last_actions = {}
 
@@ -112,13 +100,38 @@ class MAPFGPTInference:
                 actions = [actions]
         return actions
 
+    def _build_cpp(self):
+        if hasattr(self, '_cpp_built'):
+            return
+        import cppimport.import_hook  # noqa: F401
+        from mapf_gpt.observation_generator import ObservationGenerator, InputParameters
+        self._ObservationGenerator = ObservationGenerator
+        self.input_parameters = InputParameters(
+            self.cfg.cost2go_value_limit,
+            self.cfg.num_agents,
+            self.cfg.num_previous_actions,
+            self.cfg.context_size,
+            self.cfg.cost2go_radius,
+            self.cfg.agents_radius,
+            self.cfg.grid_step,
+            self.cfg.save_cost2go,
+        )
+        self._cpp_built = True
+
+    @staticmethod
+    def build():
+        """Pre-build C++ extension. Call before parallel execution (e.g. Dask) to avoid concurrent builds."""
+        import cppimport.import_hook  # noqa: F401
+        from mapf_gpt.observation_generator import ObservationGenerator, InputParameters  # noqa: F401
+
     def _prepare_inputs(self, pos, observations):
         if isinstance(observations[0], dict):
+            self._build_cpp()
             agent_positions = [obs["global_xy"] for obs in observations]
             goals = [obs["global_target_xy"] for obs in observations]
 
             if pos not in self._obs_generators:
-                gen = ObservationGenerator(
+                gen = self._ObservationGenerator(
                     observations[0]["global_obstacles"].copy().astype(int).tolist(),
                     self.input_parameters,
                 )

@@ -1,21 +1,6 @@
-# from pathlib import Path
-# from typing import Literal, Optional
-#
-# import cppimport.import_hook
-# import torch
-# from huggingface_hub import hf_hub_download
-# from pogema_toolbox.algorithm_config import AlgoBase
-# from pogema_toolbox.registry import ToolboxRegistry
-# from pydantic import Extra
-#
-# from mapf_gpt.model import GPT, GPTConfig
-# from tokenizer import cost2go
-# from tokenizer.tokenizer import Encoder, InputParameters
-
 from pathlib import Path
 from typing import Literal, Optional
 
-import cppimport.import_hook
 import torch
 from huggingface_hub import hf_hub_download
 from pogema_toolbox.algorithm_config import AlgoBase
@@ -23,7 +8,6 @@ from pogema_toolbox.registry import ToolboxRegistry
 from pydantic import Extra
 
 from mapf_gpt.model import GPT, GPTConfig
-from mapf_gpt.observation_generator import ObservationGenerator, InputParameters
 
 
 class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
@@ -33,8 +17,8 @@ class MAPFGPTInferenceConfig(AlgoBase, extra=Extra.forbid):
     cost2go_value_limit: int = 20
     agents_radius: int = 5
     cost2go_radius: int = 5
-    path_to_weights: Optional[str] = "weights/model-6M.pt"
-    device: str = "cuda"
+    path_to_weights: Optional[str] = "weights/MAPF-GPT-2M.pt"
+    device: Optional[str] = None
     context_size: int = 256
     mask_actions_history: bool = False
     mask_goal: bool = False
@@ -63,25 +47,22 @@ def strip_prefix_from_state_dict(state_dict, prefix="_orig_mod."):
 class MAPFGPTInference:
     def __init__(self, cfg: MAPFGPTInferenceConfig, net=None):
         self.cfg: MAPFGPTInferenceConfig = cfg
-        self.input_parameters = InputParameters(
-            cfg.cost2go_value_limit,
-            cfg.num_agents,
-            cfg.num_previous_actions,
-            cfg.context_size,
-            cfg.cost2go_radius,
-            cfg.agents_radius,
-            cfg.grid_step,
-            cfg.save_cost2go
-        )
-        self.observation_generator = None
-        self.last_actions = None
+        self._obs_generators = {}
+        self._last_actions = {}
 
         path_to_weights = Path(self.cfg.path_to_weights)
-        if path_to_weights.name in ['model-2M.pt', 'model-6M.pt', 'model-85M.pt']:
+        if path_to_weights.name in ['MAPF-GPT-2M.pt', 'MAPF-GPT-6M.pt', 'MAPF-GPT-85M.pt', 'MAPF-GPT-DDG-2M.pt']:
             hf_hub_download(repo_id=self.cfg.repo_id, filename=path_to_weights.name, local_dir=path_to_weights.parent)
             ToolboxRegistry.info(f'Using weights loaded from huggingface: {path_to_weights}')
 
-        if ('cuda' in self.cfg.device and not torch.cuda.is_available()) or (self.cfg.device == 'mps' and not torch.backends.mps.is_available()):
+        if self.cfg.device is None:
+            if torch.cuda.is_available():
+                self.cfg.device = 'cuda'
+            elif torch.backends.mps.is_available():
+                self.cfg.device = 'mps'
+            else:
+                self.cfg.device = 'cpu'
+        elif ('cuda' in self.cfg.device and not torch.cuda.is_available()) or (self.cfg.device == 'mps' and not torch.backends.mps.is_available()):
             ToolboxRegistry.warning(f'{self.cfg.device} is not available, using cpu instead!')
             self.cfg.device = 'cpu'
 
@@ -103,33 +84,94 @@ class MAPFGPTInference:
             self.net.to(self.cfg.device)
             self.net.eval()
 
-    def act(self, observations):
-        if isinstance(observations[0], dict):
-            positions = [obs["global_xy"] for obs in observations]
-            goals = [obs["global_target_xy"] for obs in observations]
-            if self.observation_generator is None:
-                self.observation_generator = ObservationGenerator(observations[0]["global_obstacles"].copy().astype(int).tolist(), self.input_parameters)
-                self.observation_generator.create_agents(positions, goals)
-                self.last_actions = [-1 for _ in range(len(observations))]
-            self.observation_generator.update_agents(positions, goals, self.last_actions)
-            inputs = self.observation_generator.generate_observations()
-        else:
-            inputs = observations
+    def _forward_batch(self, inputs):
         if len(inputs) > self.cfg.batch_size:
             actions = []
             for i in range(0, len(inputs), self.cfg.batch_size):
-                batch_inputs = inputs[i:i + self.cfg.batch_size]
-                tensor_obs = torch.tensor(batch_inputs, dtype=torch.long, device=self.cfg.device)
+                tensor_obs = torch.tensor(inputs[i:i + self.cfg.batch_size], dtype=torch.long, device=self.cfg.device)
                 batch_actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
+                if not isinstance(batch_actions, list):
+                    batch_actions = [batch_actions]
                 actions.extend(batch_actions)
         else:
             tensor_obs = torch.tensor(inputs, dtype=torch.long, device=self.cfg.device)
             actions = torch.squeeze(self.net.act(tensor_obs, generator=self.torch_generator)).tolist()
-        if not isinstance(actions, list):
-            actions = [actions]
-        self.last_actions = actions.copy()
+            if not isinstance(actions, list):
+                actions = [actions]
         return actions
 
+    def _build_cpp(self):
+        if hasattr(self, '_cpp_built'):
+            return
+        import cppimport.import_hook  # noqa: F401
+        from mapf_gpt.observation_generator import ObservationGenerator, InputParameters
+        self._ObservationGenerator = ObservationGenerator
+        self.input_parameters = InputParameters(
+            self.cfg.cost2go_value_limit,
+            self.cfg.num_agents,
+            self.cfg.num_previous_actions,
+            self.cfg.context_size,
+            self.cfg.cost2go_radius,
+            self.cfg.agents_radius,
+            self.cfg.grid_step,
+            self.cfg.save_cost2go,
+        )
+        self._cpp_built = True
+
+    @staticmethod
+    def build():
+        """Pre-build C++ extension. Call before parallel execution (e.g. Dask) to avoid concurrent builds."""
+        import cppimport.import_hook  # noqa: F401
+        from mapf_gpt.observation_generator import ObservationGenerator, InputParameters  # noqa: F401
+
+    def _prepare_inputs(self, pos, observations):
+        if isinstance(observations[0], dict):
+            self._build_cpp()
+            agent_positions = [obs["global_xy"] for obs in observations]
+            goals = [obs["global_target_xy"] for obs in observations]
+
+            if pos not in self._obs_generators:
+                gen = self._ObservationGenerator(
+                    observations[0]["global_obstacles"].copy().astype(int).tolist(),
+                    self.input_parameters,
+                )
+                gen.create_agents(agent_positions, goals)
+                self._obs_generators[pos] = gen
+                self._last_actions[pos] = [-1] * len(observations)
+
+            self._obs_generators[pos].update_agents(
+                agent_positions, goals, self._last_actions[pos]
+            )
+            return self._obs_generators[pos].generate_observations()
+        return observations
+
+    def act(self, observations):
+        return self.act_batch([observations])[0]
+
+    def act_batch(self, observations_list, positions=None):
+        if positions is None:
+            positions = list(range(len(observations_list)))
+
+        all_inputs = []
+        env_agent_counts = []
+        for pos, observations in zip(positions, observations_list):
+            inputs = self._prepare_inputs(pos, observations)
+            all_inputs.extend(inputs)
+            env_agent_counts.append(len(inputs))
+
+        all_actions = self._forward_batch(all_inputs)
+
+        results = []
+        offset = 0
+        for pos, count in zip(positions, env_agent_counts):
+            env_actions = all_actions[offset:offset + count]
+            self._last_actions[pos] = env_actions.copy()
+            results.append(env_actions)
+            offset += count
+
+        return results
+
     def reset_states(self):
-        self.observation_generator = None
+        self._obs_generators = {}
+        self._last_actions = {}
         self.torch_generator.manual_seed(0)

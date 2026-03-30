@@ -35,12 +35,12 @@ algorithms:
     name: MAPF-GPT
     parallel_backend: balanced_dask
     num_process: 4
-    path_to_weights: weights/model-2M.pt
+    path_to_weights: weights/MAPF-GPT-2M.pt
   MAPF-GPT-6M:
     name: MAPF-GPT
     parallel_backend: balanced_dask
     num_process: 4
-    path_to_weights: weights/model-6M.pt
+    path_to_weights: weights/MAPF-GPT-6M.pt
 
 results_views:
   TabularView1:

@@ -71,7 +71,7 @@ In addition to statistics about SoC, success rate, etc., you will also get an SV
 ## Running evaluation
 
 You can run the `benchmark.py` script, which will run both MAPF-GPT-2M and MAPF-GPT-6M models on all the scenarios from the POGEMA benchmark.
-You can also run the MAPF-GPT-85M model by setting `path_to_weights` to `weights/model-85M.pt`. The weights for all models will be downloaded automatically.
+You can also run the MAPF-GPT-85M model by setting `path_to_weights` to `weights/MAPF-GPT-85M.pt`. The weights for all models will be downloaded automatically.
 
 ```
 python benchmark.py
